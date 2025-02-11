@@ -3,6 +3,9 @@
 import React from "react";
 import { FiArrowUp, FiArrowDown, FiTrash2, FiEdit3, FiMaximize2, FiMinimize2 } from "react-icons/fi";
 import MDEditor from "@uiw/react-md-editor";
+import rehypeKatex from "rehype-katex";
+import remarkMath from "remark-math";
+import "katex/dist/katex.css";
 
 interface TextBlockProps {
   id: number;
@@ -25,6 +28,24 @@ export const TextBlock = ({
   isFirst,
   isLast 
 }: TextBlockProps) => {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const editorRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (editorRef.current && !editorRef.current.contains(event.target as Node)) {
+        setIsEditing(false);
+      }
+    }
+
+    if (isEditing) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [isEditing]);
+
   return (
     <div
       className="relative mb-6 rounded-xl border border-gray-100 bg-white shadow-sm transition-all"
@@ -82,14 +103,33 @@ export const TextBlock = ({
       </div>
 
       <div className="p-4">
-        <MDEditor
-          value={content}
-          onChange={(value) => updateBlock(id, value || "")}
-          preview="live"
-          hideToolbar={true}
-          className="border-none shadow-none"
-          height={200}
-        />
+        {isEditing ? (
+          <div ref={editorRef}>
+            <MDEditor
+              value={content}
+              onChange={(value) => updateBlock(id, value || "")}
+              preview="live"
+              hideToolbar={true}
+              className="border-none shadow-none"
+              height={200}
+              previewOptions={{
+                rehypePlugins: [[rehypeKatex, { output: 'html' }]],
+                remarkPlugins: [remarkMath],
+              }}
+            />
+          </div>
+        ) : (
+          <div 
+            onDoubleClick={() => setIsEditing(true)}
+            className="min-h-[50px] prose max-w-none"
+          >
+            <MDEditor.Markdown 
+              source={content} 
+              rehypePlugins={[[rehypeKatex, { output: 'html' }]]}
+              remarkPlugins={[remarkMath]}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
