@@ -1,8 +1,7 @@
 'use client';
 
 import React from "react";
-import { useDrag, useDrop } from "react-dnd";
-import { FiMove, FiTrash2, FiEdit3, FiMaximize2, FiMinimize2 } from "react-icons/fi";
+import { FiArrowUp, FiArrowDown, FiTrash2, FiEdit3, FiMaximize2, FiMinimize2 } from "react-icons/fi";
 import MDEditor from "@uiw/react-md-editor";
 
 interface TextBlockProps {
@@ -12,40 +11,42 @@ interface TextBlockProps {
   moveBlock: (fromIndex: number, toIndex: number) => void;
   updateBlock: (id: number, content: string) => void;
   deleteBlock: (id: number) => void;
+  isFirst: boolean;
+  isLast: boolean;
 }
 
-export const TextBlock = ({ id, content, index, moveBlock, updateBlock, deleteBlock }: TextBlockProps) => {
-  const [{ isDragging }, drag] = useDrag({
-    type: "TEXT_BLOCK",
-    item: { id, index },
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging()
-    })
-  });
-
-  const [, drop] = useDrop({
-    accept: "TEXT_BLOCK",
-    hover: (item: { index: number }, monitor) => {
-      if (item.index !== index) {
-        moveBlock(item.index, index);
-        item.index = index;
-      }
-    }
-  });
-
+export const TextBlock = ({ 
+  id, 
+  content, 
+  index, 
+  moveBlock, 
+  updateBlock, 
+  deleteBlock,
+  isFirst,
+  isLast 
+}: TextBlockProps) => {
   return (
     <div
-      ref={node => {
-        drag(node);
-        drop(node);
-      }}
-      className={`relative mb-6 rounded-xl border border-gray-100 bg-white shadow-sm transition-all ${isDragging ? "opacity-50" : ""}`}
+      className="relative mb-6 rounded-xl border border-gray-100 bg-white shadow-sm transition-all"
       data-color-mode="light"
     >
       <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 p-2 rounded-t-xl">
-        <div className="flex items-center space-x-2">
-          <button className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500">
-            <FiMove className="h-4 w-4" />
+        <div className="flex items-center space-x-1">
+          <button 
+            className={`p-1.5 hover:bg-gray-200 rounded-md text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed`}
+            onClick={() => moveBlock(index, index - 1)}
+            disabled={isFirst}
+            title="Move Up"
+          >
+            <FiArrowUp className="h-4 w-4" />
+          </button>
+          <button 
+            className={`p-1.5 hover:bg-gray-200 rounded-md text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed`}
+            onClick={() => moveBlock(index, index + 1)}
+            disabled={isLast}
+            title="Move Down"
+          >
+            <FiArrowDown className="h-4 w-4" />
           </button>
         </div>
         <div className="flex items-center space-x-1">
