@@ -1,0 +1,3 @@
+openai>=1.0.0
+PyMuPDF==1.23.8  # This is the fitz module
+python-dotenv==1.0.0
