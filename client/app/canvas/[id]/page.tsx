@@ -60,10 +60,65 @@ export default function CanvasPage() {
     });
   }, [id]);
 
-  const handleAIGeneration = (file: File | null, instructions: string) => {
-    // TODO: Implement AI generation logic here
-    console.log('File:', file);
-    console.log('Instructions:', instructions);
+  const handleAIGeneration = async (file: File | null, instructions: string) => {
+    if (!file) return;
+
+    // Check file size (10MB limit)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+    if (file.size > MAX_FILE_SIZE) {
+      alert('File size exceeds 10MB limit. Please choose a smaller file.');
+      return;
+    }
+
+    try {
+      // Upload file directly to FastAPI backend
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const uploadResponse = await fetch('http://localhost:8000/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!uploadResponse.ok) {
+        const error = await uploadResponse.json();
+        throw new Error(error.detail || 'Failed to upload file');
+      }
+      
+      const { filePath } = await uploadResponse.json();
+
+      // Generate text blocks
+      const generateResponse = await fetch('http://localhost:8000/api/generate-text-blocks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ file_path: filePath }),
+      });
+
+      if (!generateResponse.ok) {
+        const error = await generateResponse.json();
+        throw new Error(error.detail || 'Failed to generate text blocks');
+      }
+
+      const { data } = await generateResponse.json();
+
+      // Add each generated block to the canvas
+      const newBlocks = data.blocks.map((block: { title: string; content: string }) => ({
+        id: Date.now() + Math.random(), // Ensure unique IDs
+        content: `${block.title}\n\n${block.content}`,
+      }));
+
+      setBlocks((currentBlocks) => {
+        const updatedBlocks = [...currentBlocks, ...newBlocks];
+        updateCanvas(id as string, { blocks: updatedBlocks, editedAt: new Date().toISOString() });
+        return updatedBlocks;
+      });
+
+    } catch (error) {
+      console.error('Error in AI generation:', error);
+      alert(error instanceof Error ? error.message : 'An error occurred during AI generation');
+    }
   };
 
   return (
