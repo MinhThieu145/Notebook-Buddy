@@ -2,17 +2,17 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { DndProvider } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
-import { FiPlus } from 'react-icons/fi';
+import { FiPlus, FiZap } from 'react-icons/fi';
 import { getCanvas, updateCanvas, Block } from '../../utils/canvasStore';
 import { TextBlock } from '../../components/TextBlock';
+import { AIGenerateModal } from '../../components/AIGenerateModal';
 
 export default function CanvasPage() {
   const { id } = useParams();
   const router = useRouter();
   const [blocks, setBlocks] = useState<Block[]>([]);
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
 
   useEffect(() => {
     const canvas = getCanvas(id as string);
@@ -60,6 +60,12 @@ export default function CanvasPage() {
     });
   }, [id]);
 
+  const handleAIGeneration = (file: File | null, instructions: string) => {
+    // TODO: Implement AI generation logic here
+    console.log('File:', file);
+    console.log('Instructions:', instructions);
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
@@ -78,27 +84,41 @@ export default function CanvasPage() {
 
       {/* Main Content */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <DndProvider backend={HTML5Backend}>
-          <div className="space-y-4">
-            {blocks.map((block, index) => (
-              <TextBlock
-                key={block.id}
-                {...block}
-                index={index}
-                moveBlock={moveBlock}
-                updateBlock={updateBlock}
-                deleteBlock={deleteBlock}
-              />
-            ))}
-          </div>
-        </DndProvider>
+        <div className="space-y-4">
+          {blocks.map((block, index) => (
+            <TextBlock
+              key={block.id}
+              {...block}
+              index={index}
+              moveBlock={moveBlock}
+              updateBlock={updateBlock}
+              deleteBlock={deleteBlock}
+              isFirst={index === 0}
+              isLast={index === blocks.length - 1}
+            />
+          ))}
+        </div>
         
-        <button
-          onClick={addBlock}
-          className="mt-6 flex w-full items-center justify-center rounded-xl border-2 border-dashed border-gray-200 p-4 text-gray-500 transition-colors duration-200 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600"
-        >
-          <FiPlus className="mr-2" /> Add new block
-        </button>
+        <div className="mt-6 grid grid-cols-2 gap-4">
+          <button
+            onClick={addBlock}
+            className="flex items-center justify-center rounded-xl border-2 border-dashed border-gray-200 p-4 text-gray-500 transition-colors duration-200 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600"
+          >
+            <FiPlus className="mr-2" /> Add new block
+          </button>
+          <button
+            onClick={() => setIsAIModalOpen(true)}
+            className="flex items-center justify-center rounded-xl border-2 border-dashed border-gray-200 p-4 text-gray-500 transition-colors duration-200 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600"
+          >
+            <FiZap className="mr-2" /> Generate with AI
+          </button>
+        </div>
+
+        <AIGenerateModal
+          isOpen={isAIModalOpen}
+          onClose={() => setIsAIModalOpen(false)}
+          onSubmit={handleAIGeneration}
+        />
       </div>
     </div>
   );
