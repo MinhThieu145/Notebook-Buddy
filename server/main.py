@@ -37,29 +37,30 @@ logger = logging.getLogger(__name__)
 logger.info("Starting Notebook Buddy API server")
 
 # Import routers after environment variables are loaded
-from api.endpoints import text_blocks, upload, users, vector_stores, auth, assistants, projects
+from api.endpoints import auth, projects, assistants, text_blocks, upload, vector_stores
 
 # Include routers
 app.include_router(auth.router, tags=["auth"])
+app.include_router(projects.router, tags=["projects"])
+app.include_router(assistants.router, tags=["assistants"])
 app.include_router(text_blocks.router, tags=["text-blocks"])
 app.include_router(upload.router, tags=["upload"])
-app.include_router(users.router, tags=["users"])
 app.include_router(vector_stores.router, tags=["vector-stores"])
-app.include_router(assistants.router, tags=["assistants"])
-app.include_router(projects.router, tags=["projects"])
 
 logger.info("All routers configured successfully")
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to the Notebook Buddy API"}
+    return {"message": "Welcome to Notebook Buddy API"}
 
 @app.get("/test")
 async def test_endpoint():
+    """Test endpoint to verify server is running"""
     return {
         "status": "success",
-        "message": "Test endpoint is working correctly",
-        "data": {
-            "timestamp": "2025-02-10T23:29:37-05:00"
+        "message": "Server is running",
+        "environment": {
+            "AWS_REGION": os.getenv("AWS_REGION", "not set"),
+            "API_URL": os.getenv("API_URL", "not set")
         }
     }
