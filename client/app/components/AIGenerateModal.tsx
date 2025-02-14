@@ -39,11 +39,56 @@ export function AIGenerateModal({ isOpen, onClose, onSubmit }: AIGenerateModalPr
     }
   };
 
-  const handleSubmit = () => {
-    onSubmit(file, instructions);
-    setFile(null);
-    setInstructions('');
-    onClose();
+  const handleSubmit = async () => {
+    if (!file) {
+      console.error('No file selected');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    formData.append('instructions', instructions);
+
+    const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/upload`;
+
+    try {
+      console.log('Uploading to URL:', apiUrl);
+      console.log('File name:', file.name);
+      console.log('File type:', file.type);
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Upload error response:', errorText);
+        try {
+          const error = JSON.parse(errorText);
+          throw new Error(error.detail || 'Upload failed');
+        } catch {
+          throw new Error(`Upload failed: ${errorText}`);
+        }
+      }
+
+      const data = await response.json();
+      console.log('Upload successful:', data);
+      
+      // Call the onSubmit callback with the file and instructions
+      onSubmit(file, instructions);
+      
+      // Reset the form
+      setFile(null);
+      setInstructions('');
+      onClose();
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert(error instanceof Error ? error.message : 'An error occurred during upload');
+    }
   };
 
   if (!isOpen) return null;
