@@ -1,17 +1,19 @@
 import os
 import time
 import shutil
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request
 from typing import Dict
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Create uploads directory if it doesn't exist
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(..., max_size=10 * 1024 * 1024)) -> Dict:  # 10MB limit
+async def upload_file(request: Request, file: UploadFile = File(..., max_size=10 * 1024 * 1024)) -> Dict:  # 10MB limit
     """
     Handle file upload and save to temporary location.
     
@@ -24,6 +26,13 @@ async def upload_file(file: UploadFile = File(..., max_size=10 * 1024 * 1024)) -
     Raises:
         HTTPException: If file is too large or invalid.
     """
+    logger.info(f"Incoming upload request from {request.client.host}")
+    logger.debug(f"Headers: {dict(request.headers)}")
+    
+    if not file or not file.filename:
+        logger.error("No file uploaded")
+        raise HTTPException(400, "No file provided")
+    
     try:
         # Validate file type
         if not file.filename.endswith('.pdf'):
@@ -46,6 +55,7 @@ async def upload_file(file: UploadFile = File(..., max_size=10 * 1024 * 1024)) -
         }
         
     except Exception as e:
+        logger.exception(f"Upload failed: {str(e)}")
         # Clean up any partially uploaded file
         if 'file_path' in locals() and os.path.exists(file_path):
             os.remove(file_path)
