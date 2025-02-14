@@ -56,5 +56,13 @@ wheels/
 .installed.cfg
 *.egg
 *.pyc
+
+# python server
 __pycache__/
 server/uploads/
+
+# test server
+test
+
+# experiment area
+experiment area/
