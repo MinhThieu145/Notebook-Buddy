@@ -85,28 +85,37 @@ class AuthService:
             print(f"Traceback: {traceback.format_exc()}")
             return None
 
-    def create_user(self, email: str, password: str) -> Dict:
+    def create_user(self, email: str, password: str | None = None, name: str | None = None, provider: str | None = None, provider_id: str | None = None) -> Dict:
         """Create a new user in DynamoDB"""
-        print(f"Creating user with email: {email}")
-        hashed_password = self.get_password_hash(password)
+        print(f"Creating user with email: {email}, provider: {provider}")
+        
         user = {
             'pk': f'USER#{email}',
             'sk': f'USER#{email}',
             'email': email,
-            'hashed_password': hashed_password,
+            'name': name,
             'is_active': True,
-            'is_demo': False  # Default to non-demo user
+            'is_demo': False,  # Default to non-demo user
         }
+
+        # Add provider-specific fields
+        if provider:
+            user['provider'] = provider
+            user['providerId'] = provider_id
+        elif password:
+            user['hashed_password'] = self.get_password_hash(password)
         
         try:
-            print(f"Putting user in DynamoDB: {user['pk']}")
+            print(f"Saving user to DynamoDB: {user}")
             self.table.put_item(Item=user)
-            print("User created successfully")
+            
+            # Return user data without sensitive information
             return {
-                'id': user['pk'],
-                'email': user['email'],
-                'is_active': user['is_active'],
-                'is_demo': user.get('is_demo', False)
+                "id": email,
+                "email": email,
+                "name": name,
+                "provider": provider,
+                "is_demo": False
             }
         except Exception as e:
             print(f"Error creating user: {str(e)}")
@@ -120,12 +129,18 @@ class AuthService:
         user = self.get_user_by_email(email)
         if not user:
             return None
+            
+        # Only verify password for credentials provider
+        if user.get('provider') == 'google':
+            return None  # Google users should use Google OAuth
         if not self.verify_password(password, user['hashed_password']):
             return None
+            
         return {
-            'id': user['pk'],
+            'pk': user['pk'],
             'email': user['email'],
-            'is_active': user['is_active']
+            'is_active': user['is_active'],
+            'provider': user.get('provider', 'credentials')
         }
 
     def update_user_demo_flag(self, email: str, is_demo: bool) -> None:
