@@ -96,13 +96,13 @@ export default function Home() {
           {/* Sign In/Create Account buttons moved below demo */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link 
-              href="/login"
+              href="/auth/login"
               className="inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 md:text-lg"
             >
               Sign In
             </Link>
             <Link 
-              href="/register"
+              href="/auth/register"
               className="inline-flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-indigo-600 bg-white hover:bg-gray-50 border-indigo-600 md:text-lg"
             >
               Create Account
