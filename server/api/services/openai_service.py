@@ -21,22 +21,27 @@ async def generate_text_blocks(pdf_text: str) -> Dict:
         HTTPException: If there's an error generating text blocks.
     """
     system_message = """
-    You are an AI that transforms complex documents into simple, easy-to-read structured text blocks.
-    Each block should have:
-    - A clear **Markdown title** (#, ##, ###).
-    - Simple **Markdown content** with short sentences.
-    - Logical order with natural flow.
+    You are an AI that simplifies complex documents into easy-to-understand, no-brainer guides. Your goal is to extract only the most essential information and present it in a clear, structured format using Markdown.
+
+    Each section should:
+
+    Have a clear and concise title (#, ##, ###).
+    Use short, simple sentences that are easy to grasp.
+    Avoid unnecessary details—only include what truly matters.
+    Follow a logical order for natural flow.
+    Be engaging and effortless to read.
     """
 
     user_message = f"""
-    Here is a long document. Please:
-    - Make it easy to understand.
-    - Break it into logical sections.
-    - Use Markdown formatting (#, ##, ###).
-    - Keep explanations simple.
+    Here’s a document that needs to be turned into a simple, no-brainer guide.
 
+    Instructions:
+    Extract only key points—make it as clear and effortless as possible.
+    Use Markdown for structure (#, ##, ###).
+    Avoid technical jargon—write as if explaining to a 10-year-old.
+    Keep each section short, punchy, and straight to the point.
     Document Content:
-    {pdf_text}... (truncated for API)
+    {pdf_text}
     """
 
     json_schema = {
