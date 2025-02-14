@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { FiPlus, FiZap } from 'react-icons/fi';
 import { getCanvas, updateCanvas, Block } from '../../utils/canvasStore';
@@ -15,21 +16,42 @@ interface TOCItem {
 }
 
 export default function CanvasPage() {
+  // Authentication and routing hooks
+  const { data: session, status } = useSession();
   const { id } = useParams();
   const router = useRouter();
+
+  // State hooks
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [tocItems, setTocItems] = useState<TOCItem[]>([]);
 
+  // Effect for authentication and canvas loading
   useEffect(() => {
-    const canvas = getCanvas(id as string);
-    if (!canvas) {
-      router.push('/');
-    } else {
-      setBlocks(canvas.blocks);
-    }
-  }, [id, router]);
+    console.log('Canvas ID:', id);
+    console.log('Auth Status:', status);
+    console.log('Session:', session);
+    console.log('User:', session?.user);
 
+    if (!session) {
+      console.log('No session found, redirecting to home');
+      router.push('/');
+      return;
+    }
+
+    const canvas = getCanvas(id as string);
+    console.log('Retrieved canvas:', canvas);
+    
+    if (!canvas) {
+      console.log('Canvas not found, redirecting to canvas list');
+      router.push('/canvas');
+      return;
+    }
+
+    setBlocks(canvas.blocks);
+  }, [id, session, status, router]);
+
+  // Effect for TOC generation
   useEffect(() => {
     // Generate TOC items from blocks
     const items: TOCItem[] = [];
@@ -44,6 +66,7 @@ export default function CanvasPage() {
     setTocItems(items);
   }, [blocks]);
 
+  // Callback hooks
   const moveBlock = useCallback((fromIndex: number, toIndex: number) => {
     setBlocks((blocks) => {
       const newBlocks = [...blocks];
@@ -54,14 +77,15 @@ export default function CanvasPage() {
     });
   }, [id]);
 
-  const addBlock = useCallback(() => {
-    const newBlock = { id: Date.now(), content: "New block" };
-    setBlocks((blocks) => {
-      const newBlocks = [...blocks, newBlock];
-      updateCanvas(id as string, { blocks: newBlocks, editedAt: new Date().toISOString() });
-      return newBlocks;
-    });
-  }, [id]);
+  const addBlock = useCallback((index: number, content: string) => {
+    const newBlock = {
+      id: Date.now(),
+      content: content
+    };
+    const newBlocks = [...blocks];
+    newBlocks.splice(index + 1, 0, newBlock);
+    setBlocks(newBlocks);
+  }, [blocks]);
 
   const updateBlock = useCallback((blockId: number, content: string) => {
     setBlocks((blocks) => {
@@ -92,24 +116,48 @@ export default function CanvasPage() {
     }
 
     try {
+      console.log('Starting file upload...');
+      console.log('API URL:', process.env.NEXT_PUBLIC_API_URL);
+      
       // Upload file directly to FastAPI backend
       const formData = new FormData();
       formData.append('file', file);
+      console.log('File to upload:', file.name, file.type, file.size);
       
-      const uploadResponse = await fetch('http://localhost:8000/api/upload', {
+      // The upload endpoint is at /upload
+      const uploadUrl = `${process.env.NEXT_PUBLIC_API_URL}/upload`;
+      console.log('Upload URL:', uploadUrl);
+      
+      const uploadResponse = await fetch(uploadUrl, {
         method: 'POST',
         body: formData,
       });
       
+      console.log('Upload response status:', uploadResponse.status);
+      console.log('Upload response headers:', Object.fromEntries(uploadResponse.headers.entries()));
+      
       if (!uploadResponse.ok) {
-        const error = await uploadResponse.json();
-        throw new Error(error.detail || 'Failed to upload file');
+        const errorText = await uploadResponse.text();
+        console.error('Upload error response:', errorText);
+        try {
+          const error = JSON.parse(errorText);
+          throw new Error(error.detail || 'Failed to upload file');
+        } catch {
+          throw new Error(`Failed to upload file: ${errorText}`);
+        }
       }
       
-      const { filePath } = await uploadResponse.json();
+      const uploadData = await uploadResponse.json();
+      console.log('Upload successful:', uploadData);
+      const { filePath } = uploadData;
 
       // Generate text blocks
-      const generateResponse = await fetch('http://localhost:8000/api/generate-text-blocks', {
+      console.log('Starting text block generation...');
+      // The text-blocks endpoint is at /generate-text-blocks
+      const generateUrl = `${process.env.NEXT_PUBLIC_API_URL}/generate-text-blocks`;
+      console.log('Generate URL:', generateUrl);
+      
+      const generateResponse = await fetch(generateUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -117,12 +165,23 @@ export default function CanvasPage() {
         body: JSON.stringify({ file_path: filePath }),
       });
 
+      console.log('Generate response status:', generateResponse.status);
+      console.log('Generate response headers:', Object.fromEntries(generateResponse.headers.entries()));
+      
       if (!generateResponse.ok) {
-        const error = await generateResponse.json();
-        throw new Error(error.detail || 'Failed to generate text blocks');
+        const errorText = await generateResponse.text();
+        console.error('Generate error response:', errorText);
+        try {
+          const error = JSON.parse(errorText);
+          throw new Error(error.detail || 'Failed to generate text blocks');
+        } catch {
+          throw new Error(`Failed to generate text blocks: ${errorText}`);
+        }
       }
 
-      const { data } = await generateResponse.json();
+      const generateData = await generateResponse.json();
+      console.log('Generation successful:', generateData);
+      const { data } = generateData;
 
       // Add each generated block to the canvas
       const newBlocks = data.blocks.map((block: { title: string; content: string }) => ({
@@ -130,6 +189,7 @@ export default function CanvasPage() {
         content: `${block.title}\n\n${block.content}`,
       }));
 
+      console.log('Adding new blocks to canvas:', newBlocks);
       setBlocks((currentBlocks) => {
         const updatedBlocks = [...currentBlocks, ...newBlocks];
         updateCanvas(id as string, { blocks: updatedBlocks, editedAt: new Date().toISOString() });
@@ -141,6 +201,10 @@ export default function CanvasPage() {
       alert(error instanceof Error ? error.message : 'An error occurred during AI generation');
     }
   };
+
+  if (!session) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-white flex">
@@ -194,6 +258,7 @@ export default function CanvasPage() {
                   moveBlock={moveBlock}
                   updateBlock={updateBlock}
                   deleteBlock={deleteBlock}
+                  addBlock={addBlock}
                   isFirst={index === 0}
                   isLast={index === blocks.length - 1}
                 />
@@ -203,7 +268,7 @@ export default function CanvasPage() {
           
           <div className="mt-6 grid grid-cols-2 gap-4">
             <button
-              onClick={addBlock}
+              onClick={() => addBlock(blocks.length, '')}
               className="flex items-center justify-center rounded-xl border-2 border-dashed border-gray-200 p-4 text-gray-500 transition-colors duration-200 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600"
             >
               <FiPlus className="mr-2" /> Add new block
