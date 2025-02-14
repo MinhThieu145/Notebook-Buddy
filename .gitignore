@@ -57,3 +57,4 @@ wheels/
 *.egg
 *.pyc
 __pycache__/
+server/uploads/
