@@ -24,7 +24,78 @@ export default function CanvasPage() {
       return;
     }
 
-    setCanvases(getCanvases());
+    const fetchCanvases = async () => {
+      try {
+        // Log the request details
+        const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/projects/${session.user.id}`;
+        console.log('Fetching canvases with:', {
+          url: apiUrl,
+          userId: session.user.id,
+          env: {
+            NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL
+          }
+        });
+
+        // Fetch canvases from the database
+        const response = await fetch(apiUrl);
+        
+        console.log('Fetch response:', {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Error response from server:', {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText
+          });
+          throw new Error(`Failed to fetch canvases: ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log('Fetched canvases:', data);
+
+        if (data.status === 'success' && data.data) {
+          // Transform the projects into Canvas format
+          const dbCanvases = data.data.map((project: any) => ({
+            id: project.projectId,
+            title: project.title,
+            editedAt: project.lastModified,
+            blocks: project.blocks || []
+          }));
+
+          console.log('Transformed canvases:', dbCanvases);
+
+          // Update both local storage and state
+          localStorage.setItem('notebook-buddy-canvases', JSON.stringify(dbCanvases));
+          setCanvases(dbCanvases);
+        } else {
+          console.warn('Unexpected data format:', data);
+          throw new Error('Invalid data format received from server');
+        }
+      } catch (error) {
+        console.error('Error fetching canvases:', {
+          error: error instanceof Error ? {
+            message: error.message,
+            stack: error.stack
+          } : error,
+          session: session ? {
+            ...session,
+            user: session.user ? {
+              id: session.user.id
+              // Add other non-sensitive user fields if needed
+            } : null
+          } : null
+        });
+        // Fallback to local storage if database fetch fails
+        setCanvases(getCanvases());
+      }
+    };
+
+    fetchCanvases();
   }, [session, status, router]);
 
   // Return null while checking authentication
@@ -78,9 +149,29 @@ export default function CanvasPage() {
       const projectData: ProjectResponse = JSON.parse(responseText);
       console.log('Project created successfully:', projectData);
 
-      // Update local state
-      const updatedCanvases = addCanvas(newCanvas);
-      setCanvases(updatedCanvases);
+      // Fetch updated canvas list from database
+      const canvasResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects/${session.user.id}`);
+      
+      if (canvasResponse.ok) {
+        const data = await canvasResponse.json();
+        if (data.status === 'success' && data.data) {
+          // Transform the projects into Canvas format
+          const dbCanvases = data.data.map((project: any) => ({
+            id: project.projectId,
+            title: project.title,
+            editedAt: project.lastModified,
+            blocks: project.blocks || []
+          }));
+
+          // Update both local storage and state
+          localStorage.setItem('notebook-buddy-canvases', JSON.stringify(dbCanvases));
+          setCanvases(dbCanvases);
+        }
+      } else {
+        // Fallback to local update if fetch fails
+        const updatedCanvases = addCanvas(newCanvas);
+        setCanvases(updatedCanvases);
+      }
 
     } catch (error) {
       console.error('Error creating new canvas:', error);
