@@ -2,11 +2,12 @@ from fastapi import APIRouter, HTTPException, Request
 from ..services.dynamodb_service import DynamoDBService
 from ..services.assistant_service import AssistantService
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Union
+from pydantic import BaseModel, ValidationError, root_validator
 import logging
-from pydantic import BaseModel, ValidationError
 import traceback
 import json
+from decimal import Decimal
 
 # Configure logging with more detailed format
 logging.basicConfig(
@@ -20,15 +21,56 @@ class CanvasData(BaseModel):
     id: str
     title: str
     editedAt: str
-    blocks: list[Dict[str, Any]]
+    blocks: List[Dict[str, Any]]
 
 class ProjectRequest(BaseModel):
     userId: str
     canvas: CanvasData
 
+# Define response models
+class ProjectData(BaseModel):
+    projectId: str
+    userId: str
+    title: str
+    blocks: List[Dict[str, Any]] = []
+    editedAt: Optional[str] = None
+    lastModified: Optional[str] = None
+    dateCreated: Optional[str] = None
+    assistantId: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+    @root_validator(pre=True)
+    def check_dates(cls, values):
+        # Ensure we have at least one date field
+        if not any(values.get(field) for field in ['editedAt', 'lastModified', 'dateCreated']):
+            values['editedAt'] = datetime.utcnow().isoformat()
+        return values
+
+    class Config:
+        extra = "allow"  # Allow extra fields
+
+class ProjectsResponse(BaseModel):
+    status: str
+    data: List[ProjectData]
+
+def handle_decimal_serialization(obj):
+    if isinstance(obj, Decimal):
+        return str(obj)
+    elif isinstance(obj, dict):
+        return {k: handle_decimal_serialization(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [handle_decimal_serialization(i) for i in obj]
+    return obj
+
 router = APIRouter(prefix="/projects")
 dynamodb_service = DynamoDBService()
 assistant_service = AssistantService()
+
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return str(obj)
+        return super(DecimalEncoder, self).default(obj)
 
 @router.post("/create")
 async def create_project(request: Request, project_request: ProjectRequest):
@@ -129,6 +171,50 @@ async def create_project(request: Request, project_request: ProjectRequest):
             detail=f"Unexpected error: {str(e)}\nStack trace: {traceback.format_exc()}"
         )
 
+@router.post("/update")
+async def update_project(request: Request, project_request: ProjectRequest):
+    """
+    Update an existing project
+    Args:
+        request (Request): The raw request object for logging
+        project_request (ProjectRequest): Project update request containing userId and canvas data
+    Returns:
+        dict: Updated project information
+    """
+    try:
+        # Log the raw request data
+        raw_body = await request.body()
+        logger.info(f"Received raw request body: {raw_body.decode()}")
+        
+        logger.info(f"Processing project update request for user: {project_request.userId}")
+        logger.info(f"Canvas data: {json.dumps(project_request.canvas.dict(), indent=2)}")
+
+        # Prepare the item for DynamoDB
+        item = {
+            "userId": project_request.userId,
+            "projectId": project_request.canvas.id,
+            "title": project_request.canvas.title,
+            "lastModified": project_request.canvas.editedAt,
+            "blocks": project_request.canvas.blocks
+        }
+
+        # Save to DynamoDB
+        updated_project = dynamodb_service.save_project(item)
+        
+        return {
+            "status": "success",
+            "data": {
+                "project": updated_project
+            }
+        }
+
+    except ValidationError as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating project: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/{user_id}")
 async def get_user_projects(user_id: str):
     """
@@ -140,13 +226,57 @@ async def get_user_projects(user_id: str):
     """
     try:
         logger.info(f"Fetching projects for user: {user_id}")
+        
+        # Get projects from DynamoDB
         projects = dynamodb_service.get_user_projects(user_id)
         logger.info(f"Found {len(projects)} projects for user")
-        logger.debug(f"Projects data: {json.dumps(projects, indent=2)}")
-        return {
-            'status': 'success',
-            'data': projects
-        }
+        
+        # Log raw projects for debugging
+        logger.debug("Raw projects from DynamoDB:")
+        for i, proj in enumerate(projects):
+            logger.debug(f"Project {i + 1}: {proj}")
+        
+        # Handle Decimal serialization
+        serialized_projects = handle_decimal_serialization(projects)
+        
+        # Log serialized projects for debugging
+        logger.debug("Serialized projects:")
+        for i, proj in enumerate(serialized_projects):
+            logger.debug(f"Serialized Project {i + 1}: {proj}")
+        
+        # Validate each project against our model
+        validated_projects = []
+        for project in serialized_projects:
+            try:
+                validated_project = ProjectData(**project)
+                validated_projects.append(validated_project.dict(exclude_unset=True))
+            except ValidationError as ve:
+                logger.error(f"Validation error for project: {project}")
+                logger.error(f"Validation error details: {str(ve)}")
+                # Instead of skipping, try to salvage what we can
+                try:
+                    # Create a minimal valid project
+                    minimal_project = {
+                        'projectId': project.get('projectId', ''),
+                        'userId': project.get('userId', user_id),
+                        'title': project.get('title', 'Untitled'),
+                        'blocks': project.get('blocks', []),
+                        'editedAt': project.get('editedAt') or project.get('lastModified') or datetime.utcnow().isoformat()
+                    }
+                    validated_project = ProjectData(**minimal_project)
+                    validated_projects.append(validated_project.dict(exclude_unset=True))
+                except Exception as e:
+                    logger.error(f"Failed to salvage project: {str(e)}")
+                    continue
+        
+        # Create the response using our response model
+        response = ProjectsResponse(
+            status='success',
+            data=validated_projects
+        )
+        
+        # Convert to dict for final response
+        return response.dict(exclude_unset=True)
 
     except Exception as e:
         logger.error(f"Error fetching user projects: {str(e)}")
