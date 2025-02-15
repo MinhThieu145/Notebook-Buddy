@@ -8,6 +8,7 @@ import { FiPlus, FiZap } from 'react-icons/fi';
 import { getCanvas, updateCanvas, Block } from '../../utils/canvasStore';
 import { TextBlock } from '../../components/TextBlock';
 import { AIGenerateModal } from '../../components/AIGenerateModal';
+import { debounce } from 'lodash';
 
 interface TOCItem {
   level: number;
@@ -25,6 +26,8 @@ export default function CanvasPage() {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [tocItems, setTocItems] = useState<TOCItem[]>([]);
+  const [title, setTitle] = useState('');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
 
   // Effect for authentication and canvas loading
   useEffect(() => {
@@ -39,17 +42,188 @@ export default function CanvasPage() {
       return;
     }
 
-    const canvas = getCanvas(id as string);
-    console.log('Retrieved canvas:', canvas);
-    
-    if (!canvas) {
-      console.log('Canvas not found, redirecting to canvas list');
-      router.push('/canvas');
-      return;
-    }
+    const fetchCanvasAndBlocks = async () => {
+      try {
+        // First try to get from local storage
+        const localCanvas = getCanvas(id as string);
+        console.log('Local canvas data:', localCanvas);
+        
+        // Log the request details
+        const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/projects/${session.user.id}`;
+        console.log('Fetching canvas with:', {
+          url: apiUrl,
+          userId: session.user.id,
+          canvasId: id,
+          env: {
+            NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL
+          }
+        });
+        
+        // Fetch canvas from database
+        const canvasResponse = await fetch(apiUrl);
+        
+        console.log('Canvas fetch response:', {
+          status: canvasResponse.status,
+          statusText: canvasResponse.statusText,
+          headers: Object.fromEntries(canvasResponse.headers.entries())
+        });
+        
+        if (!canvasResponse.ok) {
+          const errorText = await canvasResponse.text();
+          console.error('Error response from server (canvas):', {
+            status: canvasResponse.status,
+            statusText: canvasResponse.statusText,
+            body: errorText
+          });
+          throw new Error(`Failed to fetch canvas: ${errorText}`);
+        }
 
-    setBlocks(canvas.blocks);
+        const canvasData = await canvasResponse.json();
+        console.log('Fetched canvas data:', canvasData);
+
+        if (canvasData.status === 'success' && canvasData.data) {
+          // Find the specific canvas
+          const dbCanvas = canvasData.data.find((project: any) => project.projectId === id);
+          console.log('Found canvas in response:', dbCanvas);
+          
+          if (dbCanvas) {
+            setTitle(dbCanvas.title);
+
+            // Fetch text blocks for this canvas
+            const blocksUrl = `${process.env.NEXT_PUBLIC_API_URL}/text-blocks/${id}`;
+            console.log('Fetching text blocks with:', {
+              url: blocksUrl,
+              canvasId: id
+            });
+            
+            const blocksResponse = await fetch(blocksUrl);
+            
+            console.log('Blocks fetch response:', {
+              status: blocksResponse.status,
+              statusText: blocksResponse.statusText,
+              headers: Object.fromEntries(blocksResponse.headers.entries())
+            });
+            
+            if (blocksResponse.ok) {
+              const blocksData = await blocksResponse.json();
+              console.log('Fetched text blocks:', blocksData);
+
+              if (blocksData.status === 'success' && blocksData.data?.blocks) {
+                // Use blocks from database
+                const dbBlocks = blocksData.data.blocks.map((block: any) => ({
+                  id: parseInt(block.textBlockId),
+                  content: block.content
+                }));
+                console.log('Transformed blocks:', dbBlocks);
+                setBlocks(dbBlocks);
+                return;
+              } else {
+                console.warn('Unexpected blocks data format:', blocksData);
+              }
+            } else {
+              const errorText = await blocksResponse.text();
+              console.error('Error response from server (blocks):', {
+                status: blocksResponse.status,
+                statusText: blocksResponse.statusText,
+                body: errorText
+              });
+            }
+
+            // If we have blocks in the project data, use those
+            if (dbCanvas.blocks) {
+              console.log('Using blocks from canvas data:', dbCanvas.blocks);
+              setBlocks(dbCanvas.blocks);
+              return;
+            }
+          } else {
+            console.warn('Canvas not found in response:', {
+              canvasId: id,
+              availableProjects: canvasData.data.map((p: any) => p.projectId)
+            });
+          }
+        } else {
+          console.warn('Unexpected canvas data format:', canvasData);
+        }
+
+        // Fallback to local storage if database fetch fails or returns no data
+        if (localCanvas) {
+          console.log('Using local canvas data:', localCanvas);
+          setBlocks(localCanvas.blocks);
+          setTitle(localCanvas.title);
+        } else {
+          console.log('Canvas not found in local storage, redirecting to canvas list');
+          router.push('/canvas');
+        }
+      } catch (error) {
+        console.error('Error fetching canvas:', {
+          error: error instanceof Error ? {
+            message: error.message,
+            stack: error.stack
+          } : error,
+          session: session ? {
+            ...session,
+            user: session.user ? {
+              id: session.user.id
+              // Add other non-sensitive user fields if needed
+            } : null
+          } : null,
+          canvasId: id
+        });
+        // Fallback to local storage
+        const localCanvas = getCanvas(id as string);
+        if (localCanvas) {
+          console.log('Falling back to local canvas data:', localCanvas);
+          setBlocks(localCanvas.blocks);
+          setTitle(localCanvas.title);
+        } else {
+          console.log('Canvas not found in local storage, redirecting to canvas list');
+          router.push('/canvas');
+        }
+      }
+    };
+
+    fetchCanvasAndBlocks();
   }, [id, session, status, router]);
+
+  // Debounced function to save blocks to DynamoDB
+  const debouncedSaveBlocks = useCallback(
+    debounce(async (blocksToSave: Block[]) => {
+      if (!session?.user?.id) return;
+
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/text-blocks/save`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            projectId: id,
+            blocks: blocksToSave.map(block => ({
+              id: block.id.toString(),
+              content: block.content
+            }))
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to save text blocks');
+        }
+
+        const data = await response.json();
+        console.log('Saved text blocks:', data);
+      } catch (error) {
+        console.error('Error saving text blocks:', error);
+      }
+    }, 2000), // Save after 2 seconds of no changes
+    [id, session?.user?.id]
+  );
+
+  // Clean up the debounced function on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSaveBlocks.cancel();
+    };
+  }, [debouncedSaveBlocks]);
 
   // Effect for TOC generation
   useEffect(() => {
@@ -87,16 +261,6 @@ export default function CanvasPage() {
     setBlocks(newBlocks);
   }, [blocks]);
 
-  const updateBlock = useCallback((blockId: number, content: string) => {
-    setBlocks((blocks) => {
-      const newBlocks = blocks.map((block) =>
-        block.id === blockId ? { ...block, content } : block
-      );
-      updateCanvas(id as string, { blocks: newBlocks, editedAt: new Date().toISOString() });
-      return newBlocks;
-    });
-  }, [id]);
-
   const deleteBlock = useCallback((blockId: number) => {
     setBlocks((blocks) => {
       const newBlocks = blocks.filter((block) => block.id !== blockId);
@@ -104,6 +268,23 @@ export default function CanvasPage() {
       return newBlocks;
     });
   }, [id]);
+
+  const updateBlock = useCallback((blockId: number, content: string) => {
+    setBlocks((blocks) => {
+      const newBlocks = blocks.map((block) =>
+        block.id === blockId ? { ...block, content } : block
+      );
+      updateCanvas(id as string, { blocks: newBlocks, editedAt: new Date().toISOString() });
+      
+      // Queue the block for saving to DynamoDB
+      const updatedBlock = newBlocks.find(block => block.id === blockId);
+      if (updatedBlock) {
+        debouncedSaveBlocks([updatedBlock]);
+      }
+      
+      return newBlocks;
+    });
+  }, [id, debouncedSaveBlocks]);
 
   const handleAIGeneration = async (file: File | null, instructions: string) => {
     if (!file) return;
@@ -153,8 +334,8 @@ export default function CanvasPage() {
 
       // Generate text blocks
       console.log('Starting text block generation...');
-      // The text-blocks endpoint is at /generate-text-blocks
-      const generateUrl = `${process.env.NEXT_PUBLIC_API_URL}/generate-text-blocks`;
+      // The text-blocks endpoint is at /text-blocks/generate-text-blocks
+      const generateUrl = `${process.env.NEXT_PUBLIC_API_URL}/text-blocks/generate-text-blocks`;
       console.log('Generate URL:', generateUrl);
       
       const generateResponse = await fetch(generateUrl, {
@@ -184,9 +365,9 @@ export default function CanvasPage() {
       const { data } = generateData;
 
       // Add each generated block to the canvas
-      const newBlocks = data.blocks.map((block: { title: string; content: string }) => ({
+      const newBlocks = data.map((block: { content: string }) => ({
         id: Date.now() + Math.random(), // Ensure unique IDs
-        content: `${block.title}\n\n${block.content}`,
+        content: block.content,
       }));
 
       console.log('Adding new blocks to canvas:', newBlocks);
@@ -199,6 +380,45 @@ export default function CanvasPage() {
     } catch (error) {
       console.error('Error in AI generation:', error);
       alert(error instanceof Error ? error.message : 'An error occurred during AI generation');
+    }
+  };
+
+  const handleTitleEdit = async (newTitle: string) => {
+    if (!session?.user?.id) return;
+    
+    try {
+      const updatedCanvas = {
+        id: id as string,
+        title: newTitle,
+        editedAt: new Date().toISOString(),
+        blocks
+      };
+
+      // Update local state
+      setTitle(newTitle);
+      setIsEditingTitle(false);
+
+      // Update in storage
+      updateCanvas(id as string, updatedCanvas);
+
+      // Update in DynamoDB through FastAPI backend
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects/update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: session.user.id,
+          canvas: updatedCanvas
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update canvas');
+      }
+    } catch (error) {
+      console.error('Error updating canvas title:', error);
+      // You might want to show an error message to the user here
     }
   };
 
@@ -236,13 +456,36 @@ export default function CanvasPage() {
         {/* Header */}
         <div className="border-b border-gray-200">
           <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-1.5">
-            <div className="flex items-center">
+            <div className="flex items-center space-x-4 mb-6">
               <button
-                onClick={() => router.push('/')}
-                className="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
+                onClick={() => router.push('/canvas')}
+                className="p-2 hover:bg-gray-100 rounded-full"
               >
-                <ArrowLeftIcon className="h-4 w-4 text-gray-500" />
+                <ArrowLeftIcon className="h-6 w-6" />
               </button>
+              
+              {isEditingTitle ? (
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onBlur={() => handleTitleEdit(title)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleTitleEdit(title);
+                    }
+                  }}
+                  className="text-2xl font-bold px-2 py-1 border rounded"
+                  autoFocus
+                />
+              ) : (
+                <h1 
+                  className="text-2xl font-bold cursor-pointer"
+                  onDoubleClick={() => setIsEditingTitle(true)}
+                >
+                  {title}
+                </h1>
+              )}
             </div>
           </div>
         </div>
