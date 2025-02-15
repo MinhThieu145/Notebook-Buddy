@@ -66,3 +66,6 @@ test
 
 # experiment area
 experiment area/
+
+# test in server
+server/api/tests/
