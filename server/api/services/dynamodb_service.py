@@ -195,7 +195,7 @@ class DynamoDBService:
         try:
             item = {
                 'projectId': project_id,
-                'blockId': block_id,
+                'textBlockId': block_id,  # Changed from blockId to textBlockId
                 'content': content,
                 'lastModified': datetime.utcnow().isoformat()
             }
@@ -215,7 +215,7 @@ class DynamoDBService:
             self.text_blocks_table.delete_item(
                 Key={
                     'projectId': project_id,
-                    'blockId': block_id
+                    'textBlockId': block_id  # Changed from blockId to textBlockId
                 }
             )
         except Exception as e:
