@@ -1,10 +1,32 @@
-fastapi==0.104.1
-uvicorn==0.24.0
-pytest==7.4.3
-httpx==0.25.1
-openai>=1.0.0
-PyMuPDF==1.23.8  # This is the fitz module
-python-dotenv==1.0.0
-boto3==1.34.14
-uuid
+# Web Framework and Server
+fastapi==0.109.2
+uvicorn==0.27.1
+
+# AWS
+boto3==1.34.34
+botocore==1.34.34
+
+# PDF Processing
+PyMuPDF==1.23.26  # This is the fitz module
+
+# AI and Vector Store
+openai==1.12.0
+
+# Authentication and Security
 passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0  # For JWT tokens
+
+# Configuration and Environment
+python-dotenv==1.0.1
+pydantic==2.6.1
+pydantic-settings==2.1.0
+
+# Testing
+pytest==8.0.0
+httpx==0.26.0
+
+# File Handling
+python-multipart==0.0.9  # For handling file uploads
+
+# Type Hints
+typing-extensions==4.9.0
