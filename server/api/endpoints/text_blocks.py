@@ -1,38 +1,111 @@
-from fastapi import APIRouter, HTTPException
-from ..services.pdf_service import extract_text_from_pdf
-from ..services.openai_service import generate_text_blocks
-from typing import Dict
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, Request
+from ..services.dynamodb_service import DynamoDBService
+from typing import Dict, Any, List
+import logging
+import json
 
-class TextBlockRequest(BaseModel):
-    file_path: str
+# Configure logging
+logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/text-blocks")
+dynamodb_service = DynamoDBService()
 
-@router.post("/generate-text-blocks")
-async def create_text_blocks(request: TextBlockRequest) -> Dict:
+@router.get("/{project_id}")
+async def get_text_blocks(project_id: str):
     """
-    Generate structured text blocks from a PDF file.
-    
+    Get all text blocks for a specific project
     Args:
-        request (TextBlockRequest): Request body containing the PDF file path.
-        
+        project_id (str): ID of the project whose text blocks to retrieve
     Returns:
-        dict: A dictionary containing the generated text blocks.
-        
-    Raises:
-        HTTPException: If the file is not found or is not a PDF.
+        dict: List of text blocks
     """
-    if not request.file_path.lower().endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
-    
-    # Extract text from PDF
-    pdf_text = await extract_text_from_pdf(request.file_path)
-    
-    # Generate text blocks
-    text_blocks = await generate_text_blocks(pdf_text)
-    
-    return {
-        "status": "success",
-        "data": text_blocks
-    }
+    try:
+        logger.info(f"Fetching text blocks for project: {project_id}")
+        blocks = dynamodb_service.get_text_blocks(project_id)
+        
+        return {
+            "status": "success",
+            "data": blocks
+        }
+    except Exception as e:
+        logger.error(f"Error fetching text blocks: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{project_id}")
+async def create_text_block(project_id: str, request: Request):
+    """
+    Create a new text block for a project
+    Args:
+        project_id (str): ID of the project to create the block for
+        request (Request): Request containing the block data
+    Returns:
+        dict: Created text block
+    """
+    try:
+        body = await request.json()
+        logger.info(f"Creating text block for project {project_id} with data: {json.dumps(body, indent=2)}")
+        
+        block = dynamodb_service.save_text_block(
+            project_id=project_id,
+            block_id=body.get("id"),
+            content=body.get("content")
+        )
+        
+        return {
+            "status": "success",
+            "data": block
+        }
+    except Exception as e:
+        logger.error(f"Error creating text block: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/{project_id}/{block_id}")
+async def update_text_block(project_id: str, block_id: str, request: Request):
+    """
+    Update an existing text block
+    Args:
+        project_id (str): ID of the project containing the block
+        block_id (str): ID of the block to update
+        request (Request): Request containing the updated block data
+    Returns:
+        dict: Updated text block
+    """
+    try:
+        body = await request.json()
+        logger.info(f"Updating text block {block_id} in project {project_id} with data: {json.dumps(body, indent=2)}")
+        
+        block = dynamodb_service.save_text_block(
+            project_id=project_id,
+            block_id=block_id,
+            content=body.get("content")
+        )
+        
+        return {
+            "status": "success",
+            "data": block
+        }
+    except Exception as e:
+        logger.error(f"Error updating text block: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/{project_id}/{block_id}")
+async def delete_text_block(project_id: str, block_id: str):
+    """
+    Delete a text block
+    Args:
+        project_id (str): ID of the project containing the block
+        block_id (str): ID of the block to delete
+    Returns:
+        dict: Success message
+    """
+    try:
+        logger.info(f"Deleting text block {block_id} from project {project_id}")
+        dynamodb_service.delete_text_block(project_id, block_id)
+        
+        return {
+            "status": "success",
+            "message": "Text block deleted successfully"
+        }
+    except Exception as e:
+        logger.error(f"Error deleting text block: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
