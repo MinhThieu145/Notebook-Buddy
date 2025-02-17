@@ -118,12 +118,19 @@ export default function CanvasPage() {
         blocks: [{ id: Date.now(), content: "Start writing your document here..." }]
       };
 
+      console.log('New canvas data:', {
+        id: newCanvas.id,
+        title: newCanvas.title,
+        editedAt: newCanvas.editedAt,
+        blocks: newCanvas.blocks
+      });
+
       const requestBody = {
         userId: session.user.id,
         canvas: newCanvas
       };
       
-      console.log('Creating new canvas with data:', requestBody);
+      console.log('Creating new canvas with data:', JSON.stringify(requestBody, null, 2));
       const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/projects/create`;
       console.log('API URL:', apiUrl);
 
