@@ -25,18 +25,15 @@ export const useCanvas = (canvasId: string) => {
       if (!session?.user?.id) return;
 
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/text-blocks/save`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/text-blocks/${canvasId}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            projectId: canvasId,
-            blocks: blocksToSave.map(block => ({
-              id: block.id.toString(),
-              content: block.content
-            }))
-          }),
+          body: JSON.stringify(blocksToSave.map(block => ({
+            id: block.id.toString(),
+            content: block.content
+          }))),
         });
 
         if (!response.ok) {
@@ -60,9 +57,6 @@ export const useCanvas = (canvasId: string) => {
     setError(null);
 
     try {
-      // First try to get from local storage
-      const localCanvas = getCanvas(canvasId);
-      
       // Fetch canvas from database
       const canvasResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects/${session.user.id}`);
       
@@ -79,52 +73,35 @@ export const useCanvas = (canvasId: string) => {
           setTitle(dbCanvas.title);
 
           // Fetch text blocks
-          const blocksResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/text-blocks/${canvasId}`);
+          const blocksResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/text-blocks/${canvasId}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          });
           
           if (blocksResponse.ok) {
             const blocksData = await blocksResponse.json();
-
-            if (blocksData.status === 'success' && blocksData.data?.blocks) {
-              const dbBlocks = blocksData.data.blocks.map((block: any) => ({
-                id: parseInt(block.textBlockId),
-                content: block.content
-              }));
-              setBlocks(dbBlocks);
-              return;
+            console.log('Loaded blocks:', blocksData); // Debug log
+            if (blocksData.data && blocksData.data.blocks) {
+              setBlocks(blocksData.data.blocks.map((block: any) => ({
+                id: block.id,
+                content: block.content,
+                position: block.position || { x: 0, y: 0 }
+              })));
             }
-          }
-
-          // If we have blocks in the project data, use those
-          if (dbCanvas.blocks) {
-            setBlocks(dbCanvas.blocks);
-            return;
+          } else {
+            console.error('Failed to load blocks:', await blocksResponse.text()); // Debug log
           }
         }
-      }
-
-      // Fallback to local storage
-      if (localCanvas) {
-        setBlocks(localCanvas.blocks);
-        setTitle(localCanvas.title);
-      } else {
-        router.push('/canvas');
       }
     } catch (error) {
       console.error('Error loading canvas:', error);
       setError('Failed to load canvas. Please try again.');
-      
-      // Fallback to local storage
-      const localCanvas = getCanvas(canvasId);
-      if (localCanvas) {
-        setBlocks(localCanvas.blocks);
-        setTitle(localCanvas.title);
-      } else {
-        router.push('/canvas');
-      }
     } finally {
       setIsLoading(false);
     }
-  }, [canvasId, session?.user?.id, router]);
+  }, [session?.user?.id, canvasId]); // Add proper dependencies
 
   // Block operations
   const moveBlock = useCallback((fromIndex: number, toIndex: number) => {
