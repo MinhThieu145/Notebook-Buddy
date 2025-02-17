@@ -88,7 +88,9 @@ async def create_project(request: Request, project_request: ProjectRequest):
         logger.info(f"Received raw request body: {raw_body.decode()}")
         
         logger.info(f"Processing project creation request for user: {project_request.userId}")
-        logger.info(f"Canvas data: {json.dumps(project_request.canvas.dict(), indent=2)}")
+        canvas_data = project_request.canvas.dict()
+        logger.info(f"Canvas data received: {json.dumps(canvas_data, indent=2)}")
+        logger.info(f"editedAt value: {canvas_data.get('editedAt', 'NOT_FOUND')}")
 
         # Create an assistant for this project
         try:
@@ -117,6 +119,11 @@ async def create_project(request: Request, project_request: ProjectRequest):
         # Prepare the item for DynamoDB
         try:
             canvas_dict = project_request.canvas.dict()
+            # Ensure we have a valid editedAt
+            if not canvas_dict.get('editedAt'):
+                canvas_dict['editedAt'] = datetime.utcnow().isoformat()
+                logger.info(f"No editedAt provided, using current time: {canvas_dict['editedAt']}")
+
             item = {
                 'projectId': canvas_dict['id'],
                 'userId': project_request.userId,
