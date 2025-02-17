@@ -139,24 +139,24 @@ export const TextBlock = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => handleAIOperation("elaborate")}>
+              <DropdownMenuItem key="elaborate" onClick={() => handleAIOperation("elaborate")}>
                 Elaborate in Detail
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleAIOperation("simplify")}>
+              <DropdownMenuItem key="simplify" onClick={() => handleAIOperation("simplify")}>
                 Simplify Text
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleAIOperation("academic")}>
+              <DropdownMenuItem key="academic" onClick={() => handleAIOperation("academic")}>
                 Make Academic
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleAIOperation("summarize")}>
+              <DropdownMenuItem key="summarize" onClick={() => handleAIOperation("summarize")}>
                 Summarize
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setIsGptDialogOpen(true)}>
+              <DropdownMenuSeparator key="separator-1" />
+              <DropdownMenuItem key="custom" onClick={() => setIsGptDialogOpen(true)}>
                 Custom GPT Prompt...
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => deleteBlock(id)} className="text-red-600">
+              <DropdownMenuSeparator key="separator-2" />
+              <DropdownMenuItem key="delete" onClick={() => deleteBlock(id)} className="text-red-600">
                 Delete Block
               </DropdownMenuItem>
             </DropdownMenuContent>
