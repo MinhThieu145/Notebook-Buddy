@@ -11,66 +11,61 @@ print(f"Loading .env from: {env_path}")  # Debug print
 # Load environment variables
 load_dotenv(dotenv_path=env_path)
 
-# Debug print to verify environment variables
-print(f"AWS_ACCESS_KEY_ID loaded: {'*' * len(os.getenv('AWS_ACCESS_KEY_ID', ''))} (length: {len(os.getenv('AWS_ACCESS_KEY_ID', ''))})")
-
-class DynamoDBManager:
-    _instance = None
-    _tables = {}
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(DynamoDBManager, cls).__new__(cls)
-            cls._instance._initialize()
-        return cls._instance
-
-    def _initialize(self):
-        """Initialize the DynamoDB resource"""
-        try:
-            # Create a session with the credentials
-            session = boto3.Session(
-                aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-                aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-                region_name=os.getenv('AWS_REGION', 'us-east-1')
-            )
-            
-            # Create DynamoDB resource from session
-            self.dynamodb = session.resource('dynamodb')
-            
-            # Test connection by listing tables
-            tables = list(self.dynamodb.tables.all())
-            print("\nDynamoDB Connection Test:")
-            print(f"Found {len(tables)} tables:")
-            for table in tables:
-                print(f"- {table.name}")
-                
-            # Try to get caller identity
-            sts = session.client('sts')
-            identity = sts.get_caller_identity()
-            print(f"\nConnected as: {identity['Arn']}")
-            
-        except Exception as e:
-            print(f"Error initializing DynamoDB: {str(e)}")
-            print(f"Error type: {type(e)}")
-            import traceback
-            print(f"Traceback: {traceback.format_exc()}")
-            raise
-
-    def get_table(self, table_name: str):
-        """
-        Get a DynamoDB table instance. Caches the table reference.
-        Args:
-            table_name (str): Name of the DynamoDB table
-        Returns:
-            Table: DynamoDB table instance
-        """
-        if table_name not in self._tables:
-            self._tables[table_name] = self.dynamodb.Table(table_name)
-        return self._tables[table_name]
-
-# Create a singleton instance
-dynamodb_manager = DynamoDBManager()
-
 # Constants for table names
 TABLE_NEXTAUTH = 'NotebookBuddy_NextAuth'
-TABLE_USER = 'NotebookBuddy_User'
+
+def create_aws_session():
+    """Create and return an AWS session with configured credentials"""
+    try:
+        # Get AWS credentials
+        aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+        aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+        aws_region = os.getenv('AWS_REGION', 'us-east-1')
+        
+        if not aws_access_key_id or not aws_secret_access_key:
+            raise ValueError("AWS credentials not found in environment variables")
+            
+        print("\nInitializing AWS Session with credentials:")
+        print(f"AWS_ACCESS_KEY_ID: {'*' * len(aws_access_key_id)} (length: {len(aws_access_key_id)})")
+        print(f"AWS_SECRET_ACCESS_KEY: {'*' * len(aws_secret_access_key)} (length: {len(aws_secret_access_key)})")
+        print(f"AWS_REGION: {aws_region}")
+        
+        session = boto3.Session(
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+            region_name=aws_region
+        )
+        
+        # Test connection by getting caller identity
+        sts = session.client('sts')
+        identity = sts.get_caller_identity()
+        print(f"\nConnected as: {identity['Arn']}")
+        
+        return session
+    except Exception as e:
+        print(f"Error creating AWS session: {str(e)}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        raise
+
+# Create a global session
+aws_session = create_aws_session()
+
+# Initialize DynamoDB resource and tables
+dynamodb = aws_session.resource('dynamodb')
+nextauth_table = dynamodb.Table(TABLE_NEXTAUTH)
+
+# Test DynamoDB connection
+try:
+    tables = list(dynamodb.tables.all())
+    print("\nDynamoDB Connection Test:")
+    print(f"Found {len(tables)} tables:")
+    for table in tables:
+        print(f"- {table.name}")
+except Exception as e:
+    print(f"Error connecting to DynamoDB: {str(e)}")
+    print(f"Error type: {type(e)}")
+    import traceback
+    print(f"Traceback: {traceback.format_exc()}")
+    raise
