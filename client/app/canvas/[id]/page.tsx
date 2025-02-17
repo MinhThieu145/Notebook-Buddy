@@ -184,14 +184,14 @@ export default function CanvasPage() {
               disabled={isGenerating}
             >
               {isGenerating ? (
-                <>
+                <div key="generating" className="flex items-center">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 mr-2"></div>
                   Generating...
-                </>
+                </div>
               ) : (
-                <>
+                <div key="generate" className="flex items-center">
                   <FiZap className="mr-2" /> Generate with AI
-                </>
+                </div>
               )}
             </button>
           </div>
