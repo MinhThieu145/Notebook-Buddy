@@ -4,6 +4,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 import logging
+import time
+from datetime import datetime
 
 # Load environment variables at startup
 env_path = Path(__file__).resolve().parent / '.env'
@@ -15,6 +17,9 @@ print("\nAWS Credentials loaded:")
 print(f"AWS_ACCESS_KEY_ID: {'*' * len(os.getenv('AWS_ACCESS_KEY_ID', ''))} (length: {len(os.getenv('AWS_ACCESS_KEY_ID', ''))})")
 print(f"AWS_SECRET_ACCESS_KEY: {'*' * len(os.getenv('AWS_SECRET_ACCESS_KEY', ''))} (length: {len(os.getenv('AWS_SECRET_ACCESS_KEY', ''))})")
 print(f"AWS_REGION: {os.getenv('AWS_REGION', 'us-east-1')}")
+
+# Add start time for uptime tracking
+start_time = time.time()
 
 app = FastAPI()
 
@@ -49,7 +54,7 @@ app.include_router(vector_stores.router, tags=["vector-stores"])
 
 logger.info("All routers configured successfully")
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {"message": "Welcome to Notebook Buddy API"}
 
@@ -63,4 +68,15 @@ async def test_endpoint():
             "AWS_REGION": os.getenv("AWS_REGION", "not set"),
             "API_URL": os.getenv("API_URL", "not set")
         }
+    }
+
+@app.api_route("/health", methods=["GET", "HEAD"])
+async def health_check():
+    """Standard health check endpoint"""
+    uptime = int(time.time() - start_time)
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "uptime": uptime,
+        "version": "1.0.0"
     }
