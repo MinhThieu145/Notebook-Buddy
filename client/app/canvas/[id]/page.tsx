@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useAuth, useUser } from '@clerk/nextjs';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { FiPlus, FiZap } from 'react-icons/fi';
 import { TextBlock } from '../../components/TextBlock';
@@ -11,11 +11,13 @@ import { useCanvas } from '../../hooks/useCanvas';
 import { useAIGeneration } from '../../hooks/useAIGeneration';
 
 export default function CanvasPage() {
-  const { data: session } = useSession();
+  const { isSignedIn } = useAuth();
+  const { user } = useUser();
   const { id } = useParams();
   const router = useRouter();
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
   const {
     blocks,
@@ -37,8 +39,13 @@ export default function CanvasPage() {
     clearError: clearGenerationError,
   } = useAIGeneration({
     onSuccess: (newBlocks) => {
-      newBlocks.forEach((block, index) => {
-        addBlock(blocks.length + index, block.content);
+      // Add each block from AI generation
+      newBlocks.forEach(() => {
+        addBlock();
+      });
+      // Then update their content
+      blocks.slice(-newBlocks.length).forEach((block, idx) => {
+        updateBlock(block.id, newBlocks[idx].content);
       });
       setIsAIModalOpen(false);
     },
@@ -54,11 +61,33 @@ export default function CanvasPage() {
     setIsEditingTitle(false);
   };
 
-  if (!session) {
-    return null;
+  useEffect(() => {
+    console.log('Auth effect running:', { isSignedIn, user });
+    if (!isSignedIn || !user) {
+      console.log('Redirecting to sign-in...');
+      router.push('/sign-in');
+    } else {
+      console.log('Setting authChecked to true');
+      setAuthChecked(true);
+    }
+  }, [isSignedIn, user, router]);
+
+  console.log('Component render state:', { authChecked, isLoading, blocks, error: canvasError });
+
+  if (!authChecked) {
+    console.log('Rendering auth check loading state');
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    );
   }
 
   if (isLoading) {
+    console.log('Rendering canvas loading state');
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
@@ -70,6 +99,7 @@ export default function CanvasPage() {
   }
 
   if (canvasError || generationError) {
+    console.log('Rendering error state:', { canvasError, generationError });
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
@@ -173,7 +203,7 @@ export default function CanvasPage() {
           
           <div className="mt-6 grid grid-cols-2 gap-4">
             <button
-              onClick={() => addBlock(blocks.length, '')}
+              onClick={addBlock}
               className="flex items-center justify-center rounded-xl border-2 border-dashed border-gray-200 p-4 text-gray-500 transition-colors duration-200 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600"
             >
               <FiPlus className="mr-2" /> Add new block
