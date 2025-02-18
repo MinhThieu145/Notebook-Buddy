@@ -3,23 +3,24 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useAuth, useUser } from '@clerk/nextjs';
 import { MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { Canvas, ProjectResponse, getCanvases, addCanvas } from '../utils/canvasStore';
 
 export default function CanvasPage() {
-  const { data: session, status } = useSession();
+  const { isSignedIn } = useAuth();
+  const { user } = useUser();
   const router = useRouter();
   const [canvases, setCanvases] = useState<Canvas[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     // Log authentication status
-    console.log('Auth Status:', status);
-    console.log('Session:', session);
+    console.log('Auth Status:', isSignedIn);
+    console.log('User:', user);
 
-    if (!session) {
-      console.log('No session found, redirecting to home');
+    if (!isSignedIn || !user) {
+      console.log('No user found, redirecting to home');
       router.push('/');
       return;
     }
@@ -27,24 +28,17 @@ export default function CanvasPage() {
     const fetchCanvases = async () => {
       try {
         // Log the request details
-        const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/projects/${session.user.id}`;
+        const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/projects/${user.id}`;
         console.log('Fetching canvases with:', {
           url: apiUrl,
-          userId: session.user.id,
+          userId: user.id,
           env: {
             NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL
           }
         });
 
-        // Fetch canvases from the database
         const response = await fetch(apiUrl);
-        
-        console.log('Fetch response:', {
-          status: response.status,
-          statusText: response.statusText,
-          headers: Object.fromEntries(response.headers.entries())
-        });
-        
+
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Error response from server:', {
@@ -64,7 +58,10 @@ export default function CanvasPage() {
             id: project.projectId,
             title: project.title,
             editedAt: project.lastModified,
-            blocks: project.blocks || []
+            blocks: (project.blocks || []).map((block: any, index: number) => ({
+              ...block,
+              order: index
+            }))
           }));
 
           console.log('Transformed canvases:', dbCanvases);
@@ -82,12 +79,9 @@ export default function CanvasPage() {
             message: error.message,
             stack: error.stack
           } : error,
-          session: session ? {
-            ...session,
-            user: session.user ? {
-              id: session.user.id
-              // Add other non-sensitive user fields if needed
-            } : null
+          user: user ? {
+            id: user.id
+            // Add other non-sensitive user fields if needed
           } : null
         });
         // Fallback to local storage if database fetch fails
@@ -96,18 +90,18 @@ export default function CanvasPage() {
     };
 
     fetchCanvases();
-  }, [session, status, router]);
+  }, [isSignedIn, user, router]);
 
   // Return null while checking authentication
-  if (!session) {
-    console.log('Rendering null - no session');
+  if (!isSignedIn || !user) {
+    console.log('Rendering null - no authentication');
     return null;
   }
 
   const createNewCanvas = async () => {
     try {
-      if (!session?.user?.id) {
-        console.error('No user session found');
+      if (!user?.id) {
+        console.error('No user found');
         return;
       }
 
@@ -115,7 +109,11 @@ export default function CanvasPage() {
         id: `canvas-${Date.now()}`,
         title: 'Untitled',
         editedAt: new Date().toISOString(),
-        blocks: [{ id: Date.now(), content: "Start writing your document here..." }]
+        blocks: [{ 
+          id: Date.now(), 
+          content: "Start writing your document here...",
+          order: 0
+        }]
       };
 
       console.log('New canvas data:', {
@@ -126,7 +124,7 @@ export default function CanvasPage() {
       });
 
       const requestBody = {
-        userId: session.user.id,
+        userId: user.id,
         canvas: newCanvas
       };
       
@@ -157,7 +155,7 @@ export default function CanvasPage() {
       console.log('Project created successfully:', projectData);
 
       // Fetch updated canvas list from database
-      const canvasResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects/${session.user.id}`);
+      const canvasResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects/${user.id}`);
       
       if (canvasResponse.ok) {
         const data = await canvasResponse.json();
@@ -167,7 +165,10 @@ export default function CanvasPage() {
             id: project.projectId,
             title: project.title,
             editedAt: project.lastModified,
-            blocks: project.blocks || []
+            blocks: (project.blocks || []).map((block: any, index: number) => ({
+              ...block,
+              order: index
+            }))
           }));
 
           // Update both local storage and state
@@ -183,12 +184,9 @@ export default function CanvasPage() {
     } catch (error) {
       console.error('Error creating new canvas:', error);
       console.error('Error details:', {
-        session: session ? { 
-          ...session, 
-          user: session.user ? {
-            id: session.user.id,
-            // Add other user fields but omit sensitive data
-          } : null 
+        user: user ? { 
+          id: user.id,
+          // Add other user fields but omit sensitive data
         } : null,
         env: {
           NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL
