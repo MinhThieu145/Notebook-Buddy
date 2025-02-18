@@ -169,7 +169,7 @@ class DynamoDBService:
         Args:
             project_id (str): Project ID
         Returns:
-            list: List of text blocks
+            list: List of text blocks sorted by order
         """
         try:
             response = self.text_blocks_table.query(
@@ -178,25 +178,29 @@ class DynamoDBService:
                     ':pid': project_id
                 }
             )
-            return convert_decimal(response.get('Items', []))
+            blocks = convert_decimal(response.get('Items', []))
+            # Sort blocks by order field, if it exists
+            return sorted(blocks, key=lambda x: x.get('order', float('inf')))
         except Exception as e:
             raise Exception(f"Error getting text blocks: {str(e)}")
 
-    def save_text_block(self, project_id: str, block_id: str, content: str):
+    def save_text_block(self, project_id: str, block_id: str, content: str, order: int):
         """
         Save a text block for a project
         Args:
             project_id (str): Project ID
             block_id (str): Block ID
             content (str): Block content
+            order (int): Block order position
         Returns:
             dict: The saved text block
         """
         try:
             item = {
                 'projectId': project_id,
-                'textBlockId': block_id,  # Changed from blockId to textBlockId
+                'textBlockId': block_id,
                 'content': content,
+                'order': order,
                 'lastModified': datetime.utcnow().isoformat()
             }
             self.text_blocks_table.put_item(Item=item)
@@ -215,7 +219,7 @@ class DynamoDBService:
             self.text_blocks_table.delete_item(
                 Key={
                     'projectId': project_id,
-                    'textBlockId': block_id  # Changed from blockId to textBlockId
+                    'textBlockId': block_id
                 }
             )
         except Exception as e:
