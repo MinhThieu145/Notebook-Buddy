@@ -51,7 +51,7 @@ class ProjectData(BaseModel):
 
 class ProjectsResponse(BaseModel):
     status: str
-    data: List[ProjectData]
+    data: List[Dict[str, Any]]
 
 def handle_decimal_serialization(obj):
     if isinstance(obj, Decimal):
@@ -239,17 +239,13 @@ async def get_user_projects(user_id: str):
         logger.info(f"Found {len(projects)} projects for user")
         
         # Log raw projects for debugging
-        logger.debug("Raw projects from DynamoDB:")
-        for i, proj in enumerate(projects):
-            logger.debug(f"Project {i + 1}: {proj}")
+        logger.info(f"Raw projects from DynamoDB: {json.dumps(projects, cls=DecimalEncoder)}")
         
         # Handle Decimal serialization
         serialized_projects = handle_decimal_serialization(projects)
         
         # Log serialized projects for debugging
-        logger.debug("Serialized projects:")
-        for i, proj in enumerate(serialized_projects):
-            logger.debug(f"Serialized Project {i + 1}: {proj}")
+        logger.info(f"Serialized projects: {json.dumps(serialized_projects)}")
         
         # Validate each project against our model
         validated_projects = []
@@ -276,14 +272,20 @@ async def get_user_projects(user_id: str):
                     logger.error(f"Failed to salvage project: {str(e)}")
                     continue
         
+        logger.info(f"Number of validated projects: {len(validated_projects)}")
+        
         # Create the response using our response model
         response = ProjectsResponse(
             status='success',
             data=validated_projects
         )
         
+        # Log final response
+        response_dict = response.dict(exclude_unset=True)
+        logger.info(f"Final response: {json.dumps(response_dict)}")
+        
         # Convert to dict for final response
-        return response.dict(exclude_unset=True)
+        return response_dict
 
     except Exception as e:
         logger.error(f"Error fetching user projects: {str(e)}")
