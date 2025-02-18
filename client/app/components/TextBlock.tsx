@@ -29,10 +29,10 @@ interface TextBlockProps {
   id: number;
   content: string;
   index: number;
-  moveBlock: (fromIndex: number, toIndex: number) => void;
+  moveBlock: (blockId: number, direction: 'up' | 'down') => void;
   updateBlock: (id: number, content: string) => void;
   deleteBlock: (id: number) => void;
-  addBlock: (index: number, content: string) => void;
+  addBlock: () => void;
   isFirst: boolean;
   isLast: boolean;
 }
@@ -104,7 +104,7 @@ export const TextBlock = ({
           variant="outline"
           size="sm"
           className="h-8 bg-white"
-          onClick={() => addBlock(index, "")}
+          onClick={addBlock}
         >
           <FiPlus className="h-4 w-4 mr-1" />
           Add Above
@@ -115,7 +115,7 @@ export const TextBlock = ({
         <div className="flex items-center space-x-1">
           <button 
             className={`p-1.5 hover:bg-gray-200 rounded-md text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed`}
-            onClick={() => moveBlock(index, index - 1)}
+            onClick={() => moveBlock(id, 'up')}
             disabled={isFirst}
             title="Move Up"
           >
@@ -123,7 +123,7 @@ export const TextBlock = ({
           </button>
           <button 
             className={`p-1.5 hover:bg-gray-200 rounded-md text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed`}
-            onClick={() => moveBlock(index, index + 1)}
+            onClick={() => moveBlock(id, 'down')}
             disabled={isLast}
             title="Move Down"
           >
@@ -184,7 +184,7 @@ export const TextBlock = ({
           variant="outline"
           size="sm"
           className="h-8 bg-white"
-          onClick={() => addBlock(index + 1, "")}
+          onClick={addBlock}
         >
           <FiPlus className="h-4 w-4 mr-1" />
           Add Below
