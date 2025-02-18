@@ -11,11 +11,15 @@ logger = logging.getLogger(__name__)
 
 # Pydantic models for request validation
 class TextBlock(BaseModel):
-    id: str  # Changed back to id to match frontend
+    id: int  # Changed to int to match frontend
     content: str
+    order: int  # Add order field to track block position
 
 class TextBlockBatch(BaseModel):
     projectId: str
+    blocks: List[TextBlock]
+
+class BlocksPayload(BaseModel):
     blocks: List[TextBlock]
 
 router = APIRouter(prefix="/text-blocks")
@@ -51,26 +55,27 @@ async def get_text_blocks(project_id: str):
         logger.error(f"Error fetching text blocks: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/{project_id}")
-async def save_text_blocks(project_id: str, blocks: List[TextBlock] = Body(...)):
+@router.put("/{project_id}")
+async def save_text_blocks(project_id: str, payload: BlocksPayload = Body(...)):
     """
     Save one or more text blocks for a project. This endpoint handles both creation and updates.
     Args:
         project_id (str): ID of the project
-        blocks (List[TextBlock]): List of text blocks to save
+        payload (BlocksPayload): Object containing list of text blocks to save
     Returns:
         dict: Saved text blocks
     """
     try:
-        logger.info(f"Saving {len(blocks)} text blocks for project {project_id}")
-        logger.debug(f"Block data: {json.dumps([block.dict() for block in blocks], indent=2)}")
+        logger.info(f"Received request to save blocks for project {project_id}")
+        logger.info(f"Received blocks data: {json.dumps(payload.dict(), indent=2)}")
         
         saved_blocks = []
-        for block in blocks:
+        for block in payload.blocks:
             saved_block = dynamodb_service.save_text_block(
                 project_id=project_id,
-                block_id=block.id,  # Using id instead of textBlockId
-                content=block.content
+                block_id=str(block.id),  # Convert numeric ID to string for DynamoDB
+                content=block.content,
+                order=block.order
             )
             saved_blocks.append(saved_block)
         
