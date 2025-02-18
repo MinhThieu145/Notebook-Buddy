@@ -1,13 +1,14 @@
 export interface Block {
   id: number;
   content: string;
+  order: number;
 }
 
 export interface Canvas {
   id: string;
   title: string;
   editedAt: string;
-  blocks: Array<{ id: number; content: string }>;
+  blocks: Array<{ id: number; content: string; order: number }>;
 }
 
 export interface ProjectResponse {
