@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth, useUser } from '@clerk/nextjs';
 import { MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { Block, Project } from '@/types/canvas';
 import { Canvas, ProjectResponse, getCanvases, addCanvas } from '../utils/canvasStore';
 
 export default function CanvasPage() {
@@ -54,15 +55,15 @@ export default function CanvasPage() {
 
         if (data.status === 'success' && data.data) {
           // Transform the projects into Canvas format
-          const dbCanvases = data.data.map((project: any) => ({
-            id: project.projectId,
+          const dbCanvases = data.data.map((project: Project) => ({
+            id: project.projectId,  // Map projectId to id for local storage
             title: project.title,
-            editedAt: project.lastModified,
-            blocks: (project.blocks || []).map((block: any, index: number) => ({
+            editedAt: project.editedAt,
+            blocks: (project.blocks || []).map((block: Block, index: number) => ({
               ...block,
               order: index
             }))
-          }));
+          } as Canvas));  // Explicitly type as Canvas
 
           console.log('Transformed canvases:', dbCanvases);
 
@@ -114,7 +115,7 @@ export default function CanvasPage() {
           content: "Start writing your document here...",
           order: 0
         }]
-      };
+      } as Canvas;  // Explicitly type as Canvas
 
       console.log('New canvas data:', {
         id: newCanvas.id,
@@ -161,15 +162,15 @@ export default function CanvasPage() {
         const data = await canvasResponse.json();
         if (data.status === 'success' && data.data) {
           // Transform the projects into Canvas format
-          const dbCanvases = data.data.map((project: any) => ({
-            id: project.projectId,
+          const dbCanvases = data.data.map((project: Project) => ({
+            id: project.projectId,  // Map projectId to id for local storage
             title: project.title,
-            editedAt: project.lastModified,
-            blocks: (project.blocks || []).map((block: any, index: number) => ({
+            editedAt: project.editedAt,
+            blocks: (project.blocks || []).map((block: Block, index: number) => ({
               ...block,
               order: index
             }))
-          }));
+          } as Canvas));  // Explicitly type as Canvas
 
           // Update both local storage and state
           localStorage.setItem('notebook-buddy-canvases', JSON.stringify(dbCanvases));
