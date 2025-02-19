@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+  publish = "client/.next"
+  base = "client"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  NEXT_USE_NETLIFY_EDGE = "true"
