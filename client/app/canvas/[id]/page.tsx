@@ -189,7 +189,6 @@ export default function CanvasPage() {
               <div key={block.id} id={`block-${block.id}`}>
                 <TextBlock
                   {...block}
-                  index={index}
                   moveBlock={moveBlock}
                   updateBlock={updateBlock}
                   deleteBlock={deleteBlock}
