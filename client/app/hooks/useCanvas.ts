@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth, useUser } from '@clerk/nextjs';
-import { useRouter } from 'next/navigation';
 import { debounce } from 'lodash';
-import { Block, getCanvas, updateCanvas } from '../utils/canvasStore';
+import { Block, Project, BlockData } from '@/types/canvas';
+import { updateCanvas } from '../utils/canvasStore';
 
 interface TOCItem {
   level: number;
@@ -13,7 +13,6 @@ interface TOCItem {
 export const useCanvas = (canvasId: string) => {
   const { isSignedIn } = useAuth();
   const { user } = useUser();
-  const router = useRouter();
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [title, setTitle] = useState('');
   const [tocItems, setTocItems] = useState<TOCItem[]>([]);
@@ -31,11 +30,9 @@ export const useCanvas = (canvasId: string) => {
     };
   }, []);
 
-  // Debounced function to save blocks to DynamoDB
-  const debouncedSaveBlocks = useCallback(
-    debounce(async (blocksToSave: Block[]) => {
-      if (!user?.id) return;
-
+  // Create a stable debounced save function
+  const debouncedSave = useRef(
+    debounce(async (blocksToSave: Block[], userId: string, canvasId: string) => {
       try {
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/text-blocks/${canvasId}`, {
           method: 'PUT',
@@ -55,9 +52,14 @@ export const useCanvas = (canvasId: string) => {
         console.error('Error saving blocks:', error);
         setError('Failed to save changes. Please try again.');
       }
-    }, 2000),
-    [canvasId, user?.id]
-  );
+    }, 2000)
+  ).current;
+
+  // Memoized function that uses the debounced save
+  const debouncedSaveBlocks = useCallback((blocksToSave: Block[]) => {
+    if (!user?.id) return;
+    debouncedSave(blocksToSave, user.id, canvasId);
+  }, [user?.id, canvasId, debouncedSave]);
 
   // Load canvas data
   const loadCanvas = useCallback(async () => {
@@ -96,7 +98,7 @@ export const useCanvas = (canvasId: string) => {
       }
 
       if (canvasData.status === 'success' && canvasData.data) {
-        const dbCanvas = canvasData.data.find((project: any) => project.projectId === canvasId);
+        const dbCanvas = canvasData.data.find((project: Project) => project.projectId === canvasId);
         console.log('Found canvas:', dbCanvas);
         
         if (dbCanvas) {
@@ -129,7 +131,7 @@ export const useCanvas = (canvasId: string) => {
           }
 
           if (blocksData.status === 'success' && blocksData.data && blocksData.data.blocks) {
-            const transformedBlocks = blocksData.data.blocks.map((block: any) => ({
+            const transformedBlocks = blocksData.data.blocks.map((block: BlockData) => ({
               id: block.id || block.textBlockId,
               content: block.content,
               position: block.position || { x: 0, y: 0 },
@@ -172,7 +174,7 @@ export const useCanvas = (canvasId: string) => {
     if (isMounted.current) {
       loadCanvas();
     }
-  }, [loadCanvas]);
+  }, [loadCanvas, isSignedIn, canvasId, user?.id]);
 
   // Verify environment variable
   useEffect(() => {
@@ -302,9 +304,9 @@ export const useCanvas = (canvasId: string) => {
   // Cleanup effect
   useEffect(() => {
     return () => {
-      debouncedSaveBlocks.cancel();
+      debouncedSave.cancel();
     };
-  }, [debouncedSaveBlocks]);
+  }, [debouncedSave]);
 
   return {
     blocks,
