@@ -1,21 +1,16 @@
-export interface Block {
-  id: number;
-  content: string;
-  order: number;
-}
+import { Block, Project } from '@/types/canvas';
 
 export interface Canvas {
   id: string;
   title: string;
   editedAt: string;
-  blocks: Array<{ id: number; content: string; order: number }>;
+  blocks: Block[];
 }
 
 export interface ProjectResponse {
   status: string;
   data: {
-    project: Canvas & {
-      projectId: string;
+    project: Project & {
       userId: string;
       assistantId: string;
       metadata: {
@@ -23,7 +18,11 @@ export interface ProjectResponse {
         lastModified: string;
       };
     };
-    assistant: any; // We'll type this more specifically if needed
+    assistant: {
+      id: string;
+      name: string;
+      model: string;
+    };
   };
 }
 
