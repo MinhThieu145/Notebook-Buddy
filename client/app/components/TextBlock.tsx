@@ -1,7 +1,7 @@
 'use client';
 
 import React from "react";
-import { FiArrowUp, FiArrowDown, FiTrash2, FiEdit3, FiMaximize2, FiMinimize2, FiPlus, FiMoreVertical } from "react-icons/fi";
+import { FiArrowUp, FiArrowDown, FiPlus, FiMoreVertical } from "react-icons/fi";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +15,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -28,7 +27,6 @@ import "katex/dist/katex.css";
 interface TextBlockProps {
   id: number;
   content: string;
-  index: number;
   moveBlock: (blockId: number, direction: 'up' | 'down') => void;
   updateBlock: (id: number, content: string) => void;
   deleteBlock: (id: number) => void;
@@ -40,7 +38,6 @@ interface TextBlockProps {
 export const TextBlock = ({ 
   id, 
   content, 
-  index, 
   moveBlock, 
   updateBlock, 
   deleteBlock,
