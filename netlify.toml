@@ -1,6 +1,6 @@
 [build]
   command = "npm run build"
-  publish = "client/.next"
+  publish = ".next"
   base = "client"
 
 [[plugins]]
@@ -8,3 +8,4 @@
 
 [build.environment]
   NEXT_USE_NETLIFY_EDGE = "true"
+  NODE_VERSION = "18"
