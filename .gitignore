@@ -73,3 +73,6 @@ server/api/tests/
 
 # remove streamlit folder
 streamlit_app/
+
+# webhook test
+client/app/webhook-test
