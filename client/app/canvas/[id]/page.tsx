@@ -39,14 +39,16 @@ export default function CanvasPage() {
     clearError: clearGenerationError,
   } = useAIGeneration({
     onSuccess: (newBlocks) => {
-      // Add each block from AI generation
-      newBlocks.forEach(() => {
-        addBlock();
+      // Create blocks with the generated IDs
+      newBlocks.forEach((newBlock) => {
+        addBlock(newBlock.id); // Pass the generated ID to addBlock
       });
-      // Then update their content
-      blocks.slice(-newBlocks.length).forEach((block, idx) => {
-        updateBlock(block.id, newBlocks[idx].content);
+      
+      // Update their content
+      newBlocks.forEach((newBlock) => {
+        updateBlock(newBlock.id, newBlock.content);
       });
+      
       setIsAIModalOpen(false);
     },
   });
@@ -202,10 +204,10 @@ export default function CanvasPage() {
           
           <div className="mt-6 grid grid-cols-2 gap-4">
             <button
-              onClick={addBlock}
-              className="flex items-center justify-center rounded-xl border-2 border-dashed border-gray-200 p-4 text-gray-500 transition-colors duration-200 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600"
+              onClick={() => addBlock()}
+              className="flex items-center justify-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
             >
-              <FiPlus className="mr-2" /> Add new block
+              <FiPlus className="mr-2" /> Add Block
             </button>
             <button
               onClick={() => setIsAIModalOpen(true)}
