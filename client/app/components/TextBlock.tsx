@@ -25,11 +25,11 @@ import remarkMath from "remark-math";
 import "katex/dist/katex.css";
 
 interface TextBlockProps {
-  id: number;
+  id: string;
   content: string;
-  moveBlock: (blockId: number, direction: 'up' | 'down') => void;
-  updateBlock: (id: number, content: string) => void;
-  deleteBlock: (id: number) => void;
+  moveBlock: (blockId: string, direction: 'up' | 'down') => void;
+  updateBlock: (id: string, content: string) => void;
+  deleteBlock: (id: string) => void;
   addBlock: () => void;
   isFirst: boolean;
   isLast: boolean;
