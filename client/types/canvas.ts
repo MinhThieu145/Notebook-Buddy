@@ -1,5 +1,5 @@
 export interface Block {
-  id: number;
+  id: string;
   content: string;
   position?: { x: number; y: number };
   order: number;
@@ -13,8 +13,8 @@ export interface Project {
 }
 
 export interface BlockData {
-  id?: number;
-  textBlockId?: number;
+  id?: string;
+  textBlockId?: string;
   content: string;
   position?: { x: number; y: number };
   order?: number;
