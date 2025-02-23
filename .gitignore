@@ -70,3 +70,6 @@ experiment area/
 
 # test in server
 server/api/tests/
+
+# remove streamlit folder
+streamlit_app/
