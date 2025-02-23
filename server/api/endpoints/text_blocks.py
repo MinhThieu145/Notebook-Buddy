@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Pydantic models for request validation
 class TextBlock(BaseModel):
-    id: int  # Changed to int to match frontend
+    id: str  # Changed to string to match frontend
     content: str
     order: int  # Add order field to track block position
 
@@ -38,17 +38,11 @@ async def get_text_blocks(project_id: str):
         logger.info(f"Fetching text blocks for project: {project_id}")
         blocks = dynamodb_service.get_text_blocks(project_id)
         
-        # Transform the blocks to match client expectations
-        transformed_blocks = [{
-            'id': block['textBlockId'],
-            'content': block['content'],
-            'position': block.get('position', {'x': 0, 'y': 0})
-        } for block in blocks]
-        
+        # Blocks are already transformed in the service layer
         return {
             "status": "success",
             "data": {
-                "blocks": transformed_blocks
+                "blocks": blocks
             }
         }
     except Exception as e:
@@ -69,15 +63,22 @@ async def save_text_blocks(project_id: str, payload: BlocksPayload = Body(...)):
         logger.info(f"Received request to save blocks for project {project_id}")
         logger.info(f"Received blocks data: {json.dumps(payload.dict(), indent=2)}")
         
+        # Save each block with its order preserved
         saved_blocks = []
-        for block in payload.blocks:
+        for index, block in enumerate(payload.blocks):
+            # If order is not specified, use the index
+            order = block.order if hasattr(block, 'order') else index
+            
             saved_block = dynamodb_service.save_text_block(
                 project_id=project_id,
-                block_id=str(block.id),  # Convert numeric ID to string for DynamoDB
+                block_id=block.id,
                 content=block.content,
-                order=block.order
+                order=order
             )
             saved_blocks.append(saved_block)
+        
+        # Sort blocks by order before returning
+        saved_blocks.sort(key=lambda x: x['order'])
         
         return {
             "status": "success",
@@ -100,12 +101,11 @@ async def delete_text_block(project_id: str, block_id: str):
         dict: Success message
     """
     try:
-        logger.info(f"Deleting text block {block_id} from project {project_id}")
+        logger.info(f"Deleting block {block_id} from project {project_id}")
         dynamodb_service.delete_text_block(project_id, block_id)
-        
         return {
             "status": "success",
-            "message": "Text block deleted successfully"
+            "message": "Block deleted successfully"
         }
     except Exception as e:
         logger.error(f"Error deleting text block: {str(e)}")
