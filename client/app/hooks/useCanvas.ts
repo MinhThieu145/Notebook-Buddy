@@ -7,7 +7,7 @@ import { updateCanvas } from '../utils/canvasStore';
 interface TOCItem {
   level: number;
   text: string;
-  id: number;
+  id: string;
 }
 
 export const useCanvas = (canvasId: string) => {
@@ -64,32 +64,37 @@ export const useCanvas = (canvasId: string) => {
   // Load canvas data
   const loadCanvas = useCallback(async () => {
     if (!isSignedIn || !user?.id) {
-      console.log('Not loading canvas - user not signed in:', { isSignedIn, userId: user?.id });
+      console.log('Not signed in or no user ID');
       return;
     }
+
+    console.log('Starting loadCanvas:', { isSignedIn, userId: user?.id, canvasId });
     
-    console.log('Starting to load canvas data for ID:', canvasId);
+    if (!isMounted.current) {
+      console.log('Component not mounted during loadCanvas start');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
-      // First get the canvas metadata to ensure we have a valid project
-      const projectsUrl = `${process.env.NEXT_PUBLIC_API_URL}/projects/${user.id}`;
-      console.log('Fetching canvas metadata from:', projectsUrl);
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/projects/${user.id}`;
+      console.log('Fetching canvas data from:', url);
 
-      const canvasResponse = await fetch(projectsUrl);
-      console.log('Canvas response received:', { status: canvasResponse.status });
-      
+      const response = await fetch(url);
+      console.log('Canvas response received:', { status: response.status });
+
       if (!isMounted.current) {
         console.log('Component unmounted after canvas response');
         return;
       }
-      
-      if (!canvasResponse.ok) {
-        throw new Error('Failed to fetch canvas metadata');
+
+      if (!response.ok) {
+        throw new Error('Failed to load canvas');
       }
 
-      const canvasData = await canvasResponse.json();
+      const canvasData = await response.json();
       console.log('Canvas data received:', canvasData);
 
       if (!isMounted.current) {
@@ -97,13 +102,13 @@ export const useCanvas = (canvasId: string) => {
         return;
       }
 
-      if (canvasData.status === 'success' && canvasData.data) {
+      if (canvasData.status === 'success' && Array.isArray(canvasData.data)) {
         const dbCanvas = canvasData.data.find((project: Project) => project.projectId === canvasId);
         console.log('Found canvas:', dbCanvas);
         
         if (dbCanvas) {
           if (isMounted.current) {
-            setTitle(dbCanvas.title);
+            setTitle(dbCanvas.title || 'Untitled Canvas');
           }
           
           // Now fetch text blocks
@@ -111,7 +116,11 @@ export const useCanvas = (canvasId: string) => {
           console.log('Fetching text blocks from:', textBlocksUrl);
 
           const blocksResponse = await fetch(textBlocksUrl);
-          console.log('Text blocks response received:', { status: blocksResponse.status });
+          console.log('Text blocks response received:', { 
+            status: blocksResponse.status,
+            ok: blocksResponse.ok,
+            statusText: blocksResponse.statusText 
+          });
           
           if (!isMounted.current) {
             console.log('Component unmounted after blocks response');
@@ -123,26 +132,29 @@ export const useCanvas = (canvasId: string) => {
           }
 
           const blocksData = await blocksResponse.json();
-          console.log('Text blocks data received:', blocksData);
+          console.log('Text blocks data received:', JSON.stringify(blocksData, null, 2));
 
           if (!isMounted.current) {
             console.log('Component unmounted after parsing blocks data');
             return;
           }
 
-          if (blocksData.status === 'success' && blocksData.data && blocksData.data.blocks) {
-            const transformedBlocks = blocksData.data.blocks.map((block: BlockData) => ({
-              id: block.id || block.textBlockId,
-              content: block.content,
-              position: block.position || { x: 0, y: 0 },
-              order: block.order || 0
-            }));
+          if (blocksData.status === 'success' && blocksData.data && Array.isArray(blocksData.data.blocks)) {
+            const transformedBlocks = blocksData.data.blocks.map((block: BlockData) => {
+              console.log('Transforming block:', block);
+              return {
+                id: block.id || block.textBlockId || generateUniqueId(),
+                content: block.content || '',
+                position: block.position || { x: 0, y: 0 },
+                order: typeof block.order === 'number' ? block.order : 0
+              };
+            });
             console.log('Setting blocks:', transformedBlocks);
             if (isMounted.current) {
               setBlocks(transformedBlocks);
             }
           } else {
-            console.log('No blocks found, initializing empty array');
+            console.log('No blocks found or invalid format:', blocksData);
             if (isMounted.current) {
               setBlocks([]);
             }
@@ -152,6 +164,7 @@ export const useCanvas = (canvasId: string) => {
           throw new Error(`Canvas not found with ID: ${canvasId}`);
         }
       } else {
+        console.log('Invalid response format:', canvasData);
         throw new Error('Invalid response format from server');
       }
     } catch (error) {
@@ -181,8 +194,13 @@ export const useCanvas = (canvasId: string) => {
     console.log('API URL:', process.env.NEXT_PUBLIC_API_URL);
   }, []);
 
+  // Helper function to generate unique ID
+  const generateUniqueId = () => {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  };
+
   // Block operations
-  const moveBlock = useCallback((blockId: number, direction: 'up' | 'down') => {
+  const moveBlock = useCallback((blockId: string, direction: 'up' | 'down') => {
     setBlocks((prevBlocks) => {
       const newBlocks = [...prevBlocks];
       const index = newBlocks.findIndex((block) => block.id === blockId);
@@ -209,21 +227,28 @@ export const useCanvas = (canvasId: string) => {
     });
   }, [canvasId, debouncedSaveBlocks]);
 
-  const addBlock = useCallback(() => {
-    setBlocks((prevBlocks) => {
-      const newBlock: Block = {
-        id: Date.now(),
-        content: '',
-        order: prevBlocks.length // New blocks are added at the end
-      };
+  const addBlock = useCallback((predefinedId?: string) => {
+    const newBlock: Block = {
+      id: predefinedId || generateUniqueId(),
+      content: '',
+      order: blocks.length // New blocks are added at the end
+    };
+    
+    // Update local state first
+    setBlocks(prevBlocks => {
       const newBlocks = [...prevBlocks, newBlock];
+      
+      // Update local storage
       updateCanvas(canvasId, { blocks: newBlocks, editedAt: new Date().toISOString() });
-      debouncedSaveBlocks([newBlock]); // Save only the new block
+      
+      // Save to DynamoDB
+      debouncedSaveBlocks(newBlocks); // Save all blocks to ensure order is preserved
+      
       return newBlocks;
     });
-  }, [canvasId, debouncedSaveBlocks]);
+  }, [blocks, canvasId, debouncedSaveBlocks]);
 
-  const deleteBlock = useCallback((blockId: number) => {
+  const deleteBlock = useCallback((blockId: string) => {
     setBlocks((blocks) => {
       const newBlocks = blocks.filter((block) => block.id !== blockId);
       updateCanvas(canvasId, { blocks: newBlocks, editedAt: new Date().toISOString() });
@@ -231,7 +256,7 @@ export const useCanvas = (canvasId: string) => {
     });
   }, [canvasId]);
 
-  const updateBlock = useCallback((blockId: number, content: string) => {
+  const updateBlock = useCallback((blockId: string, content: string) => {
     setBlocks((blocks) => {
       const newBlocks = blocks.map((block) =>
         block.id === blockId ? { ...block, content } : block
