@@ -1,12 +1,15 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
+import logging
 from .aws_config import aws_session
 
 # Constants for table names
 TABLE_NEXTAUTH = 'NotebookBuddy_NextAuth'
 TABLE_USER = 'NotebookBuddy_User'
 TABLE_TEXT_BLOCKS = 'NotebookBuddy_TextBlocks'
+
+logger = logging.getLogger(__name__)
 
 def convert_decimal(obj):
     """Convert Decimal objects to strings in a nested structure"""
@@ -179,9 +182,22 @@ class DynamoDBService:
                 }
             )
             blocks = convert_decimal(response.get('Items', []))
-            # Sort blocks by order field, if it exists
-            return sorted(blocks, key=lambda x: x.get('order', float('inf')))
+            
+            # Transform blocks to match client expectations
+            transformed_blocks = []
+            for block in blocks:
+                transformed_blocks.append({
+                    'id': str(block.get('textBlockId')),  # Ensure string ID
+                    'content': block.get('content', ''),
+                    'order': int(block.get('order', 0))  # Ensure integer order
+                })
+            
+            # Sort blocks by order field
+            sorted_blocks = sorted(transformed_blocks, key=lambda x: x.get('order', float('inf')))
+            logger.info(f"Retrieved {len(sorted_blocks)} blocks for project {project_id}")
+            return sorted_blocks
         except Exception as e:
+            logger.error(f"Error getting text blocks: {str(e)}")
             raise Exception(f"Error getting text blocks: {str(e)}")
 
     def save_text_block(self, project_id: str, block_id: str, content: str, order: int):
@@ -196,16 +212,29 @@ class DynamoDBService:
             dict: The saved text block
         """
         try:
+            # Ensure block_id is a string and order is an integer
+            block_id = str(block_id)
+            order = int(order)
+            
             item = {
                 'projectId': project_id,
                 'textBlockId': block_id,
                 'content': content,
                 'order': order,
-                'lastModified': datetime.utcnow().isoformat()
+                'updatedAt': datetime.utcnow().isoformat()
             }
+            
+            logger.info(f"Saving block {block_id} with order {order}")
             self.text_blocks_table.put_item(Item=item)
-            return item
+            
+            # Return the saved item with the expected format
+            return {
+                'id': block_id,
+                'content': content,
+                'order': order
+            }
         except Exception as e:
+            logger.error(f"Error saving text block: {str(e)}")
             raise Exception(f"Error saving text block: {str(e)}")
 
     def delete_text_block(self, project_id: str, block_id: str):
