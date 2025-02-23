@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 interface UseAIGenerationProps {
-  onSuccess: (newBlocks: Array<{ id: number; content: string }>) => void;
+  onSuccess: (newBlocks: Array<{ id: string; content: string }>) => void;
 }
 
 export const useAIGeneration = ({ onSuccess }: UseAIGenerationProps) => {
@@ -22,38 +22,16 @@ export const useAIGeneration = ({ onSuccess }: UseAIGenerationProps) => {
     setError(null);
 
     try {
-      // Upload file
+      // Upload file and generate text blocks in one request
       const formData = new FormData();
       formData.append('file', file);
-      
-      const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text();
-        try {
-          const error = JSON.parse(errorText);
-          throw new Error(error.detail || 'Failed to upload file');
-        } catch {
-          throw new Error(`Failed to upload file: ${errorText}`);
-        }
+      if (instructions) {
+        formData.append('instructions', instructions);
       }
       
-      const uploadData = await uploadResponse.json();
-      const { filePath } = uploadData;
-
-      // Generate text blocks
-      const generateResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/text-blocks/generate-text-blocks`, {
+      const generateResponse = await fetch('https://notecrafts.app.n8n.cloud/webhook/test-webhook', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          file_path: filePath,
-          instructions: instructions
-        }),
+        body: formData,
       });
 
       if (!generateResponse.ok) {
@@ -66,14 +44,76 @@ export const useAIGeneration = ({ onSuccess }: UseAIGenerationProps) => {
         }
       }
 
-      const generateData = await generateResponse.json();
-      const { data } = generateData;
+      const data = await generateResponse.json();
+      
+      // Ensure we have valid data
+      if (!data || !Array.isArray(data) || !data[0]?.output) {
+        throw new Error('Invalid response format from API');
+      }
 
-      // Create new blocks with unique IDs
-      const newBlocks = data.map((block: { content: string }) => ({
-        id: Date.now() + Math.random(),
-        content: block.content,
-      }));
+      // Helper function to generate unique ID
+      const generateUniqueId = () => {
+        return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      };
+
+      // Helper function to add a block with guaranteed unique ID
+      const addBlock = (content: string) => {
+        newBlocks.push({
+          id: generateUniqueId(),
+          content: content.trim(),
+        });
+      };
+
+      interface Block {
+        id: string;
+        content: string;
+      }
+
+      const newBlocks: Block[] = [];
+
+      // Split the markdown into lines and process
+      const lines = data[0].output.split('\n').filter((line: string) => line.trim());
+      let currentBlock: string[] = [];
+      let currentLevel = 0; // 0 = no header, 1 = #, 2 = ##, 3 = ###
+
+      const finishCurrentBlock = () => {
+        if (currentBlock.length > 0) {
+          addBlock(currentBlock.join('\n'));
+          currentBlock = [];
+        }
+      };
+
+      lines.forEach((line: string) => {
+        const trimmedLine = line.trim();
+        
+        // Check if it's a header
+        if (trimmedLine.startsWith('#')) {
+          const headerLevel = trimmedLine.split(' ')[0].length; // Count #'s
+          
+          // Only create new blocks for headers level 1-3
+          if (headerLevel <= 3) {
+            finishCurrentBlock();
+            currentBlock = [trimmedLine];
+            currentLevel = headerLevel;
+          } else {
+            // For lower level headers, add to current block
+            currentBlock.push(trimmedLine);
+          }
+        } else {
+          // For non-header content
+          if (currentLevel === 0) {
+            // If no header context, create a new block
+            finishCurrentBlock();
+            currentBlock = [trimmedLine];
+          } else {
+            // Add to current header's block
+            currentBlock.push(trimmedLine);
+          }
+        }
+      });
+
+      // Add any remaining content
+      finishCurrentBlock();
 
       onSuccess(newBlocks);
     } catch (error) {
