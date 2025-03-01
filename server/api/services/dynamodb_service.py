@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 import logging
+import json
 from .aws_config import aws_session
 
 # Constants for table names
@@ -10,6 +11,12 @@ TABLE_USER = 'NotebookBuddy_User'
 TABLE_TEXT_BLOCKS = 'NotebookBuddy_TextBlocks'
 
 logger = logging.getLogger(__name__)
+
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return str(obj)
+        return super(DecimalEncoder, self).default(obj)
 
 def convert_decimal(obj):
     """Convert Decimal objects to strings in a nested structure"""
@@ -103,6 +110,10 @@ class DynamoDBService:
             dict: The retrieved item
         """
         try:
+            if not uid:
+                logger.error("No user ID provided")
+                return None
+                
             response = self.table.get_item(
                 Key={
                     'Uid': uid,
@@ -110,7 +121,10 @@ class DynamoDBService:
                 }
             )
             return response.get('Item')
+                
         except Exception as e:
+            logger.error(f"Error retrieving user project: {str(e)}")
+            logger.error(f"Full error details: {traceback.format_exc()}")
             raise Exception(f"Error retrieving user project: {str(e)}")
 
     def save_project(self, item):
@@ -253,3 +267,43 @@ class DynamoDBService:
             )
         except Exception as e:
             raise Exception(f"Error deleting text block: {str(e)}")
+
+    async def delete_project(self, project_id: str, user_id: str = None) -> dict:
+        """
+        Delete a project from DynamoDB
+        Args:
+            project_id (str): Project ID to delete
+            user_id (str, optional): User ID who owns the project
+        Returns:
+            dict: Response from DynamoDB
+        Raises:
+            Exception: If deletion fails
+        """
+        try:
+            logger.info(f"Deleting project from DynamoDB: {project_id} for user: {user_id}")
+            
+            table = dynamodb_manager.get_table('NotebookBuddy_Project')
+            
+            # Delete the project directly
+            response = table.delete_item(
+                Key={
+                    'projectId': project_id
+                },
+                ConditionExpression='userId = :uid' if user_id else None,
+                ExpressionAttributeValues={':uid': user_id} if user_id else None,
+                ReturnValues='ALL_OLD'  # Return the deleted item
+            )
+            
+            deleted_item = response.get('Attributes')
+            if not deleted_item:
+                logger.warning(f"Project {project_id} was already deleted or didn't exist")
+            else:
+                logger.info(f"Successfully deleted project: {json.dumps(deleted_item, cls=DecimalEncoder)}")
+                
+            return response
+            
+        except Exception as e:
+            error_msg = f"Failed to delete project {project_id} from DynamoDB: {str(e)}"
+            logger.error(error_msg)
+            logger.error(f"Full error details: {traceback.format_exc()}")
+            raise Exception(error_msg)
