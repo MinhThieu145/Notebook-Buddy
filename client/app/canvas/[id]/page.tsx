@@ -7,8 +7,7 @@ import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { FiPlus, FiZap } from 'react-icons/fi';
 import { TextBlock } from '../../components/TextBlock';
 import { AIGenerateModal } from '../../components/AIGenerateModal';
-import { useCanvas } from '../../hooks/useCanvas';
-import { useAIGeneration } from '../../hooks/useAIGeneration';
+import { useCanvas, useAIGeneration } from '@/app/hooks/canvasPage';
 
 export default function CanvasPage() {
   const { isSignedIn } = useAuth();
@@ -190,13 +189,16 @@ export default function CanvasPage() {
             {blocks.map((block, index) => (
               <div key={block.id} id={`block-${block.id}`}>
                 <TextBlock
-                  {...block}
+                  key={block.id}
+                  id={block.id}
+                  content={block.content}
                   moveBlock={moveBlock}
                   updateBlock={updateBlock}
                   deleteBlock={deleteBlock}
                   addBlock={addBlock}
                   isFirst={index === 0}
                   isLast={index === blocks.length - 1}
+                  blocks={blocks}
                 />
               </div>
             ))}
