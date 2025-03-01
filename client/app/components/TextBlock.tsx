@@ -30,9 +30,10 @@ interface TextBlockProps {
   moveBlock: (blockId: string, direction: 'up' | 'down') => void;
   updateBlock: (id: string, content: string) => void;
   deleteBlock: (id: string) => void;
-  addBlock: () => void;
+  addBlock: (positionOrId?: number | string) => void;
   isFirst: boolean;
   isLast: boolean;
+  blocks: { id: string }[];
 }
 
 export const TextBlock = ({ 
@@ -43,7 +44,8 @@ export const TextBlock = ({
   deleteBlock,
   addBlock,
   isFirst,
-  isLast 
+  isLast,
+  blocks
 }: TextBlockProps) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [isGptDialogOpen, setIsGptDialogOpen] = React.useState(false);
@@ -95,84 +97,104 @@ export const TextBlock = ({
       className="relative mb-6 rounded-xl border border-gray-100 bg-white shadow-sm transition-all group"
       data-color-mode="light"
     >
+      {/* Controls */}
+      <div className="absolute -left-10 top-3 flex flex-col items-center space-y-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => moveBlock(id, 'up')}
+          disabled={isFirst}
+          className="h-8 w-8"
+        >
+          <FiArrowUp className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => moveBlock(id, 'down')}
+          disabled={isLast}
+          className="h-8 w-8"
+        >
+          <FiArrowDown className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Menu */}
+      <div className="absolute -right-10 top-3 opacity-0 group-hover:opacity-100 transition-opacity">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8 px-2">
+              <FiMoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem key="elaborate" onClick={() => handleAIOperation("elaborate")}>
+              Elaborate in Detail
+            </DropdownMenuItem>
+            <DropdownMenuItem key="simplify" onClick={() => handleAIOperation("simplify")}>
+              Simplify Text
+            </DropdownMenuItem>
+            <DropdownMenuItem key="academic" onClick={() => handleAIOperation("academic")}>
+              Make Academic
+            </DropdownMenuItem>
+            <DropdownMenuItem key="summarize" onClick={() => handleAIOperation("summarize")}>
+              Summarize
+            </DropdownMenuItem>
+            <DropdownMenuSeparator key="separator-1" />
+            <DropdownMenuItem key="custom" onClick={() => setIsGptDialogOpen(true)}>
+              Custom GPT Prompt...
+            </DropdownMenuItem>
+            <DropdownMenuSeparator key="separator-2" />
+            <DropdownMenuItem key="delete" onClick={() => deleteBlock(id)} className="text-red-600">
+              Delete Block
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Content Area */}
+      <div className="px-4 py-3" ref={editorRef}>
+        {isEditing ? (
+          <MDEditor
+            value={content}
+            onChange={(value) => updateBlock(id, value || '')}
+            previewOptions={{
+              rehypePlugins: [[rehypeKatex]],
+              remarkPlugins: [[remarkMath]],
+            }}
+            height="auto"
+            preview="live"
+            visibleDragbar={false}
+          />
+        ) : (
+          <div 
+            onDoubleClick={() => setIsEditing(true)}
+            className="cursor-text min-h-[50px] prose prose-sm max-w-none"
+          >
+            <MDEditor.Markdown
+              source={content}
+              rehypePlugins={[[rehypeKatex]]}
+              remarkPlugins={[[remarkMath]]}
+              className="wmde-markdown"
+            />
+          </div>
+        )}
+      </div>
+
       {/* Add Block Above Button - Only visible on hover */}
       <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
         <Button
           variant="outline"
           size="sm"
           className="h-8 bg-white"
-          onClick={addBlock}
+          onClick={(e) => {
+            e.preventDefault();
+            addBlock(blocks.findIndex(block => block.id === id));
+          }}
         >
           <FiPlus className="h-4 w-4 mr-1" />
           Add Above
         </Button>
-      </div>
-
-      <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 p-2 rounded-t-xl">
-        <div className="flex items-center space-x-1">
-          <button 
-            className={`p-1.5 hover:bg-gray-200 rounded-md text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed`}
-            onClick={() => moveBlock(id, 'up')}
-            disabled={isFirst}
-            title="Move Up"
-          >
-            <FiArrowUp className="h-4 w-4" />
-          </button>
-          <button 
-            className={`p-1.5 hover:bg-gray-200 rounded-md text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed`}
-            onClick={() => moveBlock(id, 'down')}
-            disabled={isLast}
-            title="Move Down"
-          >
-            <FiArrowDown className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="flex items-center space-x-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 px-2">
-                <FiMoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem key="elaborate" onClick={() => handleAIOperation("elaborate")}>
-                Elaborate in Detail
-              </DropdownMenuItem>
-              <DropdownMenuItem key="simplify" onClick={() => handleAIOperation("simplify")}>
-                Simplify Text
-              </DropdownMenuItem>
-              <DropdownMenuItem key="academic" onClick={() => handleAIOperation("academic")}>
-                Make Academic
-              </DropdownMenuItem>
-              <DropdownMenuItem key="summarize" onClick={() => handleAIOperation("summarize")}>
-                Summarize
-              </DropdownMenuItem>
-              <DropdownMenuSeparator key="separator-1" />
-              <DropdownMenuItem key="custom" onClick={() => setIsGptDialogOpen(true)}>
-                Custom GPT Prompt...
-              </DropdownMenuItem>
-              <DropdownMenuSeparator key="separator-2" />
-              <DropdownMenuItem key="delete" onClick={() => deleteBlock(id)} className="text-red-600">
-                Delete Block
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div ref={editorRef}>
-        <MDEditor
-          value={content}
-          onChange={(value) => updateBlock(id, value || "")}
-          preview={isEditing ? "edit" : "preview"}
-          previewOptions={{
-            rehypePlugins: [[rehypeKatex]],
-            remarkPlugins: [[remarkMath]],
-          }}
-          className="!border-none"
-        />
       </div>
 
       {/* Add Block Below Button - Only visible on hover */}
@@ -181,7 +203,10 @@ export const TextBlock = ({
           variant="outline"
           size="sm"
           className="h-8 bg-white"
-          onClick={addBlock}
+          onClick={(e) => {
+            e.preventDefault();
+            addBlock(blocks.findIndex(block => block.id === id) + 1);
+          }}
         >
           <FiPlus className="h-4 w-4 mr-1" />
           Add Below
