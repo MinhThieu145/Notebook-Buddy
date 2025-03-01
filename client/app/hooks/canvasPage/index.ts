@@ -1,2 +1,2 @@
-export * from './useAIGeneration';
-export * from './useCanvas';
+export * from './useAIGenerateTextBlock';
+export * from './useCanvasTextBlocks';
