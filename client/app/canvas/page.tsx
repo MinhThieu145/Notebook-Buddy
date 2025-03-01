@@ -8,7 +8,7 @@ import { Block, Project } from '@/types/canvas';
 import { ConfirmDialog } from '@/app/components/common/ConfirmDialog';
 import { CanvasMenu } from '@/app/components/canvasHomePage/CanvasMenu';
 import { useClickOutside } from '@/app/hooks/common';
-import { useCanvasFetch, useCanvasOperations } from '@/app/hooks/canvasPage';
+import { useCanvasFetch, useCanvasOperations } from '@/app/hooks/canvasHomePage';
 import { 
   MagnifyingGlassIcon, 
   PlusIcon, 
