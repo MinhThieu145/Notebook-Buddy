@@ -7,7 +7,7 @@ import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { FiPlus, FiZap } from 'react-icons/fi';
 import { TextBlock } from '../../components/TextBlock';
 import { AIGenerateModal } from '../../components/AIGenerateModal';
-import { useCanvas, useAIGeneration } from '@/app/hooks/canvasPage';
+import { useCanvasTextBlocks, useAIGenerateTextBlock } from '@/app/hooks/canvasPage';
 
 export default function CanvasPage() {
   const { isSignedIn } = useAuth();
@@ -29,14 +29,14 @@ export default function CanvasPage() {
     deleteBlock,
     updateBlock,
     updateTitle,
-  } = useCanvas(id as string);
+  } = useCanvasTextBlocks(id as string);
 
   const {
     generateBlocks,
     isLoading: isGenerating,
     error: generationError,
     clearError: clearGenerationError,
-  } = useAIGeneration({
+  } = useAIGenerateTextBlock({
     onSuccess: (newBlocks) => {
       // Create blocks with the generated IDs
       newBlocks.forEach((newBlock) => {
