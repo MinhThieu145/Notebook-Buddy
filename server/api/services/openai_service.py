@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List, Optional, Any
 import openai
 import json
 from fastapi import HTTPException
@@ -6,6 +6,71 @@ from ..config.settings import settings
 
 # Initialize OpenAI client
 client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+
+class OpenAIService:
+    def __init__(self):
+        self.client = client
+        self.default_model = settings.MODEL_NAME
+
+    async def create_chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
+        stream: Optional[bool] = False,
+        system_message: Optional[str] = None,
+    ) -> Dict:
+        """
+        Create a chat completion using OpenAI's API.
+        
+        Args:
+            messages: List of message objects with role and content
+            model: Optional model to use (defaults to settings.MODEL_NAME)
+            temperature: Optional temperature parameter
+            max_tokens: Optional maximum number of tokens to generate
+            top_p: Optional top_p parameter
+            stream: Optional streaming parameter
+            system_message: Optional system message to prepend
+            
+        Returns:
+            Dict: The API response containing the generated message
+        """
+        try:
+            # Build parameters dictionary
+            params = {
+                "model": model or self.default_model,
+                "messages": messages,
+            }
+            
+            # Add system message if provided
+            if system_message:
+                params["messages"] = [{"role": "system", "content": system_message}] + params["messages"]
+                
+            # Add optional parameters if provided
+            if temperature is not None:
+                params["temperature"] = temperature
+            if max_tokens is not None:
+                params["max_tokens"] = max_tokens
+            if top_p is not None:
+                params["top_p"] = top_p
+            if stream is not None:
+                params["stream"] = stream
+
+            # Make API call
+            response = self.client.chat.completions.create(**params)
+            
+            # Return formatted response
+            return {
+                "content": response.choices[0].message.content,
+                "model": response.model,
+                "role": response.choices[0].message.role,
+            }
+            
+        except Exception as e:
+            print(f"Error in create_chat_completion: {str(e)}")
+            raise Exception(f"Error creating chat completion: {str(e)}")
 
 async def generate_text_blocks(pdf_text: str) -> Dict:
     """
