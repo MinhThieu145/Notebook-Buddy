@@ -1,10 +1,10 @@
 import { useState } from 'react';
 
-interface UseAIGenerationProps {
+interface UseAIGenerateTextBlockProps {
   onSuccess: (newBlocks: Array<{ id: string; content: string }>) => void;
 }
 
-export const useAIGeneration = ({ onSuccess }: UseAIGenerationProps) => {
+export const useAIGenerateTextBlock = ({ onSuccess }: UseAIGenerateTextBlockProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
