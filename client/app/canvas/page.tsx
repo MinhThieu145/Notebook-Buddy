@@ -1,97 +1,37 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth, useUser } from '@clerk/nextjs';
-import { MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { Canvas, getCanvases, addCanvas, ProjectResponse } from '@/app/utils/canvasStore';
 import { Block, Project } from '@/types/canvas';
-import { Canvas, ProjectResponse, getCanvases, addCanvas } from '../utils/canvasStore';
+import { ConfirmDialog } from '@/app/components/common/ConfirmDialog';
+import { CanvasMenu } from '@/app/components/canvasHomePage/CanvasMenu';
+import { useClickOutside } from '@/app/hooks/common';
+import { useCanvasFetch, useCanvasOperations } from '@/app/hooks/canvasPage';
+import { 
+  MagnifyingGlassIcon, 
+  PlusIcon, 
+  EllipsisVerticalIcon
+} from '@heroicons/react/24/outline';
+import Link from 'next/link';
 
 export default function CanvasPage() {
+  const router = useRouter();
   const { isSignedIn } = useAuth();
   const { user } = useUser();
-  const router = useRouter();
-  const [canvases, setCanvases] = useState<Canvas[]>([]);
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [canvasToDelete, setCanvasToDelete] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-
-  useEffect(() => {
-    // Log authentication status
-    console.log('Auth Status:', isSignedIn);
-    console.log('User:', user);
-
-    if (!isSignedIn || !user) {
-      console.log('No user found, redirecting to home');
-      router.push('/');
-      return;
-    }
-
-    const fetchCanvases = async () => {
-      try {
-        // Log the request details
-        const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/projects/${user.id}`;
-        console.log('Fetching canvases with:', {
-          url: apiUrl,
-          userId: user.id,
-          env: {
-            NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL
-          }
-        });
-
-        const response = await fetch(apiUrl);
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Error response from server:', {
-            status: response.status,
-            statusText: response.statusText,
-            body: errorText
-          });
-          throw new Error(`Failed to fetch canvases: ${errorText}`);
-        }
-
-        const data = await response.json();
-        console.log('Fetched canvases:', data);
-
-        if (data.status === 'success' && data.data) {
-          // Transform the projects into Canvas format
-          const dbCanvases = data.data.map((project: Project) => ({
-            id: project.projectId,  // Map projectId to id for local storage
-            title: project.title,
-            editedAt: project.editedAt,
-            blocks: (project.blocks || []).map((block: Block, index: number) => ({
-              ...block,
-              order: index
-            }))
-          } as Canvas));  // Explicitly type as Canvas
-
-          console.log('Transformed canvases:', dbCanvases);
-
-          // Update both local storage and state
-          localStorage.setItem('notebook-buddy-canvases', JSON.stringify(dbCanvases));
-          setCanvases(dbCanvases);
-        } else {
-          console.warn('Unexpected data format:', data);
-          throw new Error('Invalid data format received from server');
-        }
-      } catch (error) {
-        console.error('Error fetching canvases:', {
-          error: error instanceof Error ? {
-            message: error.message,
-            stack: error.stack
-          } : error,
-          user: user ? {
-            id: user.id
-            // Add other non-sensitive user fields if needed
-          } : null
-        });
-        // Fallback to local storage if database fetch fails
-        setCanvases(getCanvases());
-      }
-    };
-
-    fetchCanvases();
-  }, [isSignedIn, user, router]);
+  const menuRef = useRef<HTMLDivElement>(null);
+  
+  // Use our custom hooks
+  const { canvases, setCanvases, isLoading } = useCanvasFetch();
+  const { createCanvas, deleteCanvas } = useCanvasOperations(setCanvases);
+  
+  // Use our click outside hook
+  useClickOutside(menuRef, () => setMenuOpen(null), !!menuOpen);
 
   // Return null while checking authentication
   if (!isSignedIn || !user) {
@@ -99,101 +39,30 @@ export default function CanvasPage() {
     return null;
   }
 
-  const createNewCanvas = async () => {
-    try {
-      if (!user?.id) {
-        console.error('No user found');
-        return;
-      }
+  const handleDeleteClick = (canvasId: string) => {
+    setCanvasToDelete(canvasId);
+    setConfirmOpen(true);
+    setMenuOpen(null);
+  };
 
-      const newCanvas = {
-        id: `canvas-${Date.now()}`,
-        title: 'Untitled',
-        editedAt: new Date().toISOString(),
-        blocks: [{ 
-          id: Date.now(), 
-          content: "Start writing your document here...",
-          order: 0
-        }]
-      } as Canvas;  // Explicitly type as Canvas
-
-      console.log('New canvas data:', {
-        id: newCanvas.id,
-        title: newCanvas.title,
-        editedAt: newCanvas.editedAt,
-        blocks: newCanvas.blocks
-      });
-
-      const requestBody = {
-        userId: user.id,
-        canvas: newCanvas
-      };
-      
-      console.log('Creating new canvas with data:', JSON.stringify(requestBody, null, 2));
-      const apiUrl = `${process.env.NEXT_PUBLIC_API_URL}/projects/create`;
-      console.log('API URL:', apiUrl);
-
-      // Save to backend
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-      
-      const responseText = await response.text();
-      console.log('Raw response:', responseText);
-
-      if (!response.ok) {
-        throw new Error(`Failed to save project: ${responseText}`);
-      }
-
-      const projectData: ProjectResponse = JSON.parse(responseText);
-      console.log('Project created successfully:', projectData);
-
-      // Fetch updated canvas list from database
-      const canvasResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects/${user.id}`);
-      
-      if (canvasResponse.ok) {
-        const data = await canvasResponse.json();
-        if (data.status === 'success' && data.data) {
-          // Transform the projects into Canvas format
-          const dbCanvases = data.data.map((project: Project) => ({
-            id: project.projectId,  // Map projectId to id for local storage
-            title: project.title,
-            editedAt: project.editedAt,
-            blocks: (project.blocks || []).map((block: Block, index: number) => ({
-              ...block,
-              order: index
-            }))
-          } as Canvas));  // Explicitly type as Canvas
-
-          // Update both local storage and state
-          localStorage.setItem('notebook-buddy-canvases', JSON.stringify(dbCanvases));
-          setCanvases(dbCanvases);
-        }
-      } else {
-        // Fallback to local update if fetch fails
-        const updatedCanvases = addCanvas(newCanvas);
-        setCanvases(updatedCanvases);
-      }
-
-    } catch (error) {
-      console.error('Error creating new canvas:', error);
-      console.error('Error details:', {
-        user: user ? { 
-          id: user.id,
-          // Add other user fields but omit sensitive data
-        } : null,
-        env: {
-          NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL
-        }
+  const confirmDelete = () => {
+    if (canvasToDelete) {
+      deleteCanvas(canvasToDelete, () => {
+        setConfirmOpen(false);
+        setCanvasToDelete(null);
       });
     }
+  };
+
+  const cancelDelete = () => {
+    setConfirmOpen(false);
+    setCanvasToDelete(null);
+  };
+
+  const handleMoveToFolder = () => {
+    console.log('Move to folder clicked');
+    // Implement folder functionality
+    setMenuOpen(null);
   };
 
   const filteredCanvases = canvases.filter(canvas => 
@@ -202,6 +71,18 @@ export default function CanvasPage() {
 
   return (
     <div className="min-h-screen bg-white">
+      {/* Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        title="Delete Canvas"
+        message="Are you sure you want to delete this canvas? This action cannot be undone."
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonClass="bg-red-600 hover:bg-red-700"
+      />
+
       {/* Search Header */}
       <div className="border-b border-gray-200">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
@@ -226,7 +107,7 @@ export default function CanvasPage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Start New Doc Button */}
         <button
-          onClick={createNewCanvas}
+          onClick={createCanvas}
           className="w-40 h-48 rounded-lg border border-gray-200 bg-gradient-to-br from-purple-500 via-pink-500 to-yellow-500 p-4 text-left text-white hover:shadow-lg transition-shadow duration-200"
         >
           <div className="flex items-center space-x-2">
@@ -244,18 +125,37 @@ export default function CanvasPage() {
             <h2 className="text-gray-700 text-sm font-medium mb-3">Recently viewed</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
               {filteredCanvases.map((canvas) => (
-                <Link
+                <div 
                   key={canvas.id}
-                  href={`/canvas/${canvas.id}`}
-                  className="block group"
+                  className="relative"
                 >
-                  <div className="aspect-[3/4] rounded-lg border border-gray-200 hover:border-blue-300 p-3 hover:shadow-sm transition-all duration-200">
-                    <h3 className="font-medium text-sm text-gray-900">{canvas.title}</h3>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Edited {new Date(canvas.editedAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                </Link>
+                  <Link href={`/canvas/${canvas.id}`}>
+                    <div className="group rounded-lg border p-4 transition-colors hover:border-gray-300">
+                      <div className="flex items-center justify-between">
+                        <h2 className="font-semibold text-lg">{canvas.title}</h2>
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setMenuOpen(menuOpen === canvas.id ? null : canvas.id);
+                          }}
+                          className="rounded p-2 hover:bg-gray-100"
+                        >
+                          <EllipsisVerticalIcon className="h-5 w-5 text-gray-500" />
+                        </button>
+                      </div>
+                      <p className="mt-2 text-sm text-gray-600">
+                        Last edited {new Date(canvas.editedAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </Link>
+                  <CanvasMenu
+                    isOpen={menuOpen === canvas.id}
+                    canvasId={canvas.id}
+                    onDelete={() => handleDeleteClick(canvas.id)}
+                    onMoveToFolder={handleMoveToFolder}
+                    menuRef={menuRef}
+                  />
+                </div>
               ))}
             </div>
           </div>
