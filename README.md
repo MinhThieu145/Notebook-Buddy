@@ -108,5 +108,5 @@ The canvas system is the core of Notebook-Buddy, providing:
    npm run dev
 
    # Backend
-   python main.py
+   uvicorn main:app --host 0.0.0.0
    ```
